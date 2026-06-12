@@ -1,0 +1,10 @@
+.env
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.chainlit/
+models/chromadb/
+models/*.pkl
+data/processed/
+data/crawl_cache/

@@ -1,0 +1,65 @@
+{
+  "categories": [
+    {
+      "id": "drug_safety",
+      "name": "Drug Safety & Information",
+      "name_vi": "An toan thuoc & thong tin thuoc",
+      "keywords_en": ["drug", "medication", "medicine", "dose", "dosage", "side effect", "adverse", "warning", "contraindication"],
+      "keywords_vi": ["thuoc", "lieu", "lieu dung", "tac dung phu", "phan ung", "canh bao", "chong chi dinh"],
+      "risk_level": "high"
+    },
+    {
+      "id": "drug_interaction",
+      "name": "Drug Interactions",
+      "name_vi": "Tuong tac thuoc",
+      "keywords_en": ["interaction", "interact", "combine", "together with", "mixing", "take with"],
+      "keywords_vi": ["tuong tac", "ket hop", "dung chung", "uong chung", "co dung voi"],
+      "risk_level": "critical"
+    },
+    {
+      "id": "overdose_triage",
+      "name": "Overdose & Emergency Triage",
+      "name_vi": "Qua lieu & cap cuu",
+      "keywords_en": ["overdose", "too much", "poisoning", "emergency", "urgent", "triage"],
+      "keywords_vi": ["qua lieu", "uong nhieu", "ngo doc", "cap cuu", "khan cap"],
+      "risk_level": "critical"
+    },
+    {
+      "id": "disease_knowledge",
+      "name": "Disease & Condition Information",
+      "name_vi": "Thong tin benh ly",
+      "keywords_en": ["disease", "condition", "symptoms", "symptom", "treatment", "cause", "pain", "fever", "headache", "diabetes"],
+      "keywords_vi": ["benh", "trieu chung", "dieu tri", "nguyen nhan", "dau", "sot", "dau dau", "tieu duong"],
+      "risk_level": "medium"
+    },
+    {
+      "id": "pregnancy",
+      "name": "Pregnancy & Breastfeeding",
+      "name_vi": "Thai ky & cho con bu",
+      "keywords_en": ["pregnancy", "pregnant", "breastfeeding", "fetal", "fetus", "lactation"],
+      "keywords_vi": ["thai ky", "mang thai", "co bau", "cho con bu", "thai nhi"],
+      "risk_level": "critical"
+    },
+    {
+      "id": "pediatric",
+      "name": "Pediatric (Children)",
+      "name_vi": "Nhi khoa (tre em)",
+      "keywords_en": ["child", "children", "pediatric", "infant", "baby", "newborn"],
+      "keywords_vi": ["tre em", "tre nho", "nhi khoa", "tre so sinh", "em be"],
+      "risk_level": "critical"
+    },
+    {
+      "id": "elderly",
+      "name": "Elderly & Geriatric",
+      "name_vi": "Nguoi cao tuoi",
+      "keywords_en": ["elderly", "geriatric", "older adults", "aging", "senior"],
+      "keywords_vi": ["nguoi gia", "nguoi cao tuoi", "lao khoa"],
+      "risk_level": "high"
+    }
+  ],
+  "out_of_scope": {
+    "description": "Questions not related to medical or health topics",
+    "examples_en": ["How to cook pasta?", "What's the weather?", "Help me code"],
+    "examples_vi": ["Nau mi y the nao?", "Thoi tiet hom nay?", "Giup minh code"]
+  }
+}
