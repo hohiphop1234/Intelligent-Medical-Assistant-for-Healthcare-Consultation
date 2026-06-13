@@ -8,3 +8,6 @@ models/chromadb/
 models/*.pkl
 data/processed/
 data/crawl_cache/
+data/
+*.jsonl
+*.parquet
