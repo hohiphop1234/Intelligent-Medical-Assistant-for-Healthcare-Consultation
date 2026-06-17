@@ -113,6 +113,8 @@ class MedicalRAGPipeline:
         )
 
     def _retrieval_top_k(self, question: str, classification) -> int:
+        if classification.category == "drug_interaction":
+            return TOP_K * 3
         if (
             classification.category == "pregnancy"
             and should_route_pregnancy_to_drug_safety(question)

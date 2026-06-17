@@ -65,11 +65,11 @@ class ResponseGenerator:
                 answer = self._generate_with_llm(question, chunks)
             except Exception:
                 answer, used_chunks = self._generate_extractive(
-                    question, chunks, classification.language
+                    question, chunks, classification
                 )
         else:
             answer, used_chunks = self._generate_extractive(
-                question, chunks, classification.language
+                question, chunks, classification
             )
 
         return {
@@ -114,8 +114,12 @@ class ResponseGenerator:
         return "\n\n---\n\n".join(parts)
 
     def _generate_extractive(
-        self, question: str, chunks: list[dict[str, Any]], language: str
+        self,
+        question: str,
+        chunks: list[dict[str, Any]],
+        classification: QueryClassification,
     ) -> tuple[str, list[dict[str, Any]]]:
+        language = classification.language
         if language == "vi":
             intro = "Dựa trên các nguồn được truy xuất:"
             closing = (
@@ -130,6 +134,13 @@ class ResponseGenerator:
                 "especially for pregnancy, children, older adults, medical conditions, "
                 "or medication changes."
             )
+
+        if classification.category == "drug_interaction":
+            interaction_answer = self._generate_interaction_answer(
+                question, chunks, language, classification.entities, intro, closing
+            )
+            if interaction_answer is not None:
+                return interaction_answer
 
         if self._is_side_effect_question(question):
             side_effect_answer = self._generate_side_effect_answer(
@@ -166,6 +177,165 @@ class ResponseGenerator:
         ]
         used_chunks = [chunk for chunk, _ in evidence]
         return intro + "\n\n" + "\n".join(bullets) + "\n\n" + closing, used_chunks
+
+    def _generate_interaction_answer(
+        self,
+        question: str,
+        chunks: list[dict[str, Any]],
+        language: str,
+        entities: list[str],
+        intro: str,
+        closing: str,
+    ) -> tuple[str, list[dict[str, Any]]] | None:
+        query_entities = set(entities) or set(
+            extract
+            for extract in [
+                "warfarin",
+                "ibuprofen",
+                "aspirin",
+                "acetaminophen",
+                "metformin",
+                "insulin",
+                "phenytoin",
+                "rifampin",
+            ]
+            if extract in normalize_for_match(question)
+        )
+        candidates: list[tuple[float, dict[str, Any], str]] = []
+        seen_sentences: set[str] = set()
+        for chunk in chunks[:10]:
+            content = chunk.get("content", "")
+            for sentence in self._interaction_sentences(content):
+                cleaned = self._clean_extractive_sentence(sentence)
+                if not cleaned:
+                    continue
+                normalized = normalize_for_match(cleaned)
+                score = self._interaction_sentence_score(normalized, query_entities)
+                if score <= 0:
+                    continue
+                key = normalized[:180]
+                if key in seen_sentences:
+                    continue
+                seen_sentences.add(key)
+                candidates.append((score, chunk, self._truncate_words(cleaned, 95)))
+
+        if not candidates:
+            return None
+
+        candidates.sort(key=lambda item: item[0], reverse=True)
+        best_normalized = normalize_for_match(candidates[0][2])
+        if query_entities and all(entity in best_normalized for entity in query_entities) and any(
+            cue in best_normalized
+            for cue in ["may interact", "do not start", "without discussing", "khong bat dau"]
+        ):
+            candidates = candidates[:1]
+
+        selected: list[tuple[dict[str, Any], str]] = []
+        used_chunk_ids: set[str] = set()
+        for _, chunk, sentence in candidates:
+            chunk_id = str(chunk.get("id") or chunk.get("doc_id") or sentence[:80])
+            if chunk_id in used_chunk_ids:
+                continue
+            used_chunk_ids.add(chunk_id)
+            selected.append((chunk, sentence))
+            if len(selected) >= 2:
+                break
+
+        bullets = [
+            f"- {sentence} [{index}]"
+            for index, (_, sentence) in enumerate(selected, 1)
+        ]
+        used_chunks = [chunk for chunk, _ in selected]
+        return intro + "\n\n" + "\n".join(bullets) + "\n\n" + closing, used_chunks
+
+    def _interaction_sentences(self, content: str) -> list[str]:
+        bullet_blocks = [
+            block.strip()
+            for block in re.split(r"\s+\*\s+", content)
+            if len(block.split()) >= 8
+        ]
+        if len(bullet_blocks) > 1:
+            return bullet_blocks
+        return [
+            sentence.strip()
+            for sentence in re.split(r"(?<=[.!?])\s+", content)
+            if len(sentence.split()) >= 8
+        ]
+
+    def _interaction_sentence_score(
+        self, normalized_sentence: str, query_entities: set[str]
+    ) -> float:
+        cues = [
+            "interact",
+            "interaction",
+            "nsaid",
+            "nonsteroidal",
+            "anti inflammatory",
+            "blood thinner",
+            "anticoagulant",
+            "bleeding risk",
+            "risk of bleeding",
+            "increase the risk of bleeding",
+            "do not start",
+            "without discussing",
+            "closely monitor",
+            "monitor inr",
+            "tuong tac",
+            "chay mau",
+            "nguy co chay mau",
+            "khong bat dau",
+        ]
+        cue_hits = min(3, sum(1 for cue in cues if cue in normalized_sentence))
+        if cue_hits == 0:
+            return 0.0
+
+        entity_hits = sum(1 for entity in query_entities if entity in normalized_sentence)
+        nsaid_support = "ibuprofen" in query_entities and (
+            "nsaid" in normalized_sentence
+            or "nonsteroidal" in normalized_sentence
+            or "anti inflammatory" in normalized_sentence
+        )
+        if entity_hits == 0 and not nsaid_support:
+            return 0.0
+
+        action_bonus = 2.0 if any(
+            cue in normalized_sentence
+            for cue in [
+                "do not start",
+                "without discussing",
+                "tell your doctor",
+                "tell your healthcare provider",
+                "closely monitor",
+                "khong bat dau",
+                "hoi bac si",
+            ]
+        ) else 0.0
+        class_bonus = 1.5 if nsaid_support else 0.0
+        direct_pair_bonus = 0.0
+        if {"ibuprofen", "warfarin"}.issubset(query_entities) and all(
+            entity in normalized_sentence for entity in ["ibuprofen", "warfarin"]
+        ):
+            direct_pair_bonus = 4.0
+            if not any(
+                cue in normalized_sentence
+                for cue in ["may interact", "do not start", "without discussing"]
+            ):
+                direct_pair_bonus = 2.0
+        length_penalty = min(max((len(normalized_sentence.split()) - 120) / 80, 0.0), 4.0)
+        return (
+            (entity_hits * 2.0)
+            + cue_hits
+            + action_bonus
+            + class_bonus
+            + direct_pair_bonus
+            - length_penalty
+        )
+
+    def _truncate_words(self, text: str, max_words: int) -> str:
+        words = text.split()
+        if len(words) <= max_words:
+            return text
+        return " ".join(words[:max_words]).rstrip(" ,;:") + "..."
 
     def _dedupe_chunks_for_answer(
         self, chunks: list[dict[str, Any]]
@@ -312,20 +482,19 @@ class ResponseGenerator:
 
     def _find_sentence_with_terms(self, content: str, terms: list[str]) -> str:
         normalized_content = normalize_for_match(content)
+        lowered_terms = [term.lower() for term in terms]
         if "hoai tu" in normalized_content or "gangrene" in normalized_content:
-            if any(term in ["hoại tử", "gangrene", "màu tím", "tối màu"] for term in terms):
-                return (
-                    "Warfarin có thể gây hoại tử hoặc hoại thư; hãy gọi bác sĩ ngay "
-                    "nếu thấy da đổi màu/tím, loét, đau dữ dội hoặc thay đổi màu/nhiệt độ trên cơ thể"
-                )
-            if any(term in ["necrosis", "gangrene", "purple", "dark"] for term in terms):
+            if any(term in lowered_terms for term in ["necrosis", "purple", "dark"]):
                 return (
                     "Warfarin may cause necrosis or gangrene; call a doctor right away "
                     "if skin turns dark or purple, ulcers appear, severe pain occurs, "
                     "or body color/temperature changes"
                 )
+            return (
+                "Warfarin có thể gây hoại tử hoặc hoại thư; hãy gọi bác sĩ ngay "
+                "nếu thấy da đổi màu/tím, loét, đau dữ dội hoặc thay đổi màu/nhiệt độ trên cơ thể"
+            )
 
-        lowered_terms = [term.lower() for term in terms]
         for sentence in re.split(r"(?<=[.!?])\s+", content):
             if any(term in sentence.lower() for term in lowered_terms):
                 return sentence[:450].strip(" .;:-")

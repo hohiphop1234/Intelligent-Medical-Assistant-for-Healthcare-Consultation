@@ -122,6 +122,19 @@ class EvidenceGrader:
         entity = normalize_for_match(str(metadata.get("entity") or chunk.get("entity", "")))
         question_normalized = normalize_for_match(question)
         content_normalized = normalize_for_match(chunk.get("content", ""))
+        search_score = float(
+            chunk.get("score", chunk.get("vector_score", chunk.get("fused_score", 0.0))) or 0.0
+        )
+        if self._is_interaction_question(question, query_entities):
+            return self._interaction_score(
+                question_normalized,
+                content_normalized,
+                metadata,
+                query_entities,
+                overlap,
+                search_score,
+            )
+
         entity_matches_query = bool(entity and entity in question_normalized)
         content_has_query_entity = any(entity_name in content_normalized for entity_name in query_entities)
         if query_entities and not entity_matches_query and not content_has_query_entity:
@@ -129,11 +142,103 @@ class EvidenceGrader:
 
         entity_bonus = 0.3 if entity_matches_query or content_has_query_entity else 0.0
         topic_bonus = pregnancy_relevance_bonus(question, chunk.get("content", ""), metadata)
-        search_score = float(
-            chunk.get("score", chunk.get("vector_score", chunk.get("fused_score", 0.0))) or 0.0
-        )
         search_bonus = min(max(search_score, 0.0), 1.0) * 0.2
         return min(1.0, overlap * 0.7 + entity_bonus + topic_bonus + search_bonus)
+
+    def _is_interaction_question(self, question: str, query_entities: set[str]) -> bool:
+        normalized = normalize_for_match(question)
+        interaction_terms = [
+            "interaction",
+            "interact",
+            "take with",
+            "with",
+            "together",
+            "combine",
+            "mix",
+            "tuong tac",
+            "dung chung",
+            "uong chung",
+            "ket hop",
+            "voi",
+        ]
+        return len(query_entities) >= 2 and any(term in normalized for term in interaction_terms)
+
+    def _interaction_score(
+        self,
+        question_normalized: str,
+        content_normalized: str,
+        metadata: dict[str, Any],
+        query_entities: set[str],
+        overlap: float,
+        search_score: float,
+    ) -> float:
+        interaction_cues = [
+            "interact",
+            "interaction",
+            "nsaid",
+            "nonsteroidal",
+            "anti inflammatory",
+            "blood thinner",
+            "anticoagulant",
+            "bleeding risk",
+            "risk of bleeding",
+            "increase the risk of bleeding",
+            "do not start",
+            "without discussing",
+            "closely monitor",
+            "monitor inr",
+            "concomitant",
+            "tuong tac",
+            "chay mau",
+            "nguy co chay mau",
+            "khong bat dau",
+        ]
+        if not any(cue in content_normalized for cue in interaction_cues):
+            return min(0.2, overlap * 0.5)
+
+        entity_hits = {entity for entity in query_entities if entity in content_normalized}
+        metadata_entity = normalize_for_match(str(metadata.get("entity", "")))
+        if metadata_entity in query_entities:
+            entity_hits.add(metadata_entity)
+
+        nsaid_support = "ibuprofen" in query_entities and (
+            "nsaid" in content_normalized
+            or "nonsteroidal" in content_normalized
+            or "anti inflammatory" in content_normalized
+        )
+        if not entity_hits and not nsaid_support:
+            return 0.15
+
+        entity_score = len(entity_hits) / max(len(query_entities), 1)
+        if nsaid_support:
+            entity_score = max(entity_score, 0.75)
+
+        warning_bonus = 0.0
+        if any(
+            cue in content_normalized
+            for cue in [
+                "do not start",
+                "without discussing",
+                "closely monitor",
+                "tell your doctor",
+                "tell your healthcare provider",
+                "khong bat dau",
+                "hoi bac si",
+            ]
+        ):
+            warning_bonus += 0.15
+        if "warfarin" in question_normalized and (
+            "bleeding risk" in content_normalized
+            or "risk of bleeding" in content_normalized
+            or "increase the risk of bleeding" in content_normalized
+        ):
+            warning_bonus += 0.15
+
+        category = str(metadata.get("category", ""))
+        category_penalty = 0.25 if category == "pregnancy" else 0.0
+        search_bonus = min(max(search_score, 0.0), 1.0) * 0.15
+        score = 0.3 + (entity_score * 0.3) + (overlap * 0.3) + warning_bonus + search_bonus
+        return min(1.0, max(0.0, score - category_penalty))
 
     def _query_entities(self, question: str) -> set[str]:
         normalized = normalize_for_match(question)

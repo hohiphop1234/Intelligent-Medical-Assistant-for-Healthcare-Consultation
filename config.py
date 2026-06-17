@@ -45,6 +45,17 @@ RAW_DATA_DIR = str(BASE_DIR / "data" / "raw")
 PROCESSED_DATA_DIR = str(BASE_DIR / "data" / "processed")
 CATEGORIES_PATH = str(BASE_DIR / "data" / "categories.json")
 RAW_DATA_FALLBACK_DIR = str(Path.home() / "Downloads" / "rag_processed")
+RAW_DATA_FALLBACK_DIRS = [
+    candidate
+    for candidate in [
+        os.getenv("RAG_DATA_SOURCE_DIR"),
+        os.getenv("RAG_DATA_DIR"),
+        str(BASE_DIR / "data" / "rag_processed"),
+        str(Path.home() / "Downloads" / "data" / "rag_processed"),
+        RAW_DATA_FALLBACK_DIR,
+    ]
+    if candidate
+]
 
 # Chunking
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "800"))
