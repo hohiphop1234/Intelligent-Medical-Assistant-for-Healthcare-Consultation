@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from config import BM25_WEIGHT, TOP_K, VECTOR_WEIGHT
+from src.utils import expand_query_with_drug_aliases, extract_drug_entities, normalize_for_match
 
 
 class HybridRetriever:
@@ -23,7 +24,8 @@ class HybridRetriever:
         if language is None:
             language = self.embeddings.detect_language(query)
 
-        query_embedding = self.embeddings.embed(query, language)
+        expanded_query = expand_query_with_drug_aliases(query)
+        query_embedding = self.embeddings.embed(expanded_query, language)
         vector_results = self.vector_store.search(
             query_embedding,
             language,
@@ -31,9 +33,10 @@ class HybridRetriever:
             category_filter=category_filter,
         )
         bm25_results = self.bm25.search(
-            query, language, top_k=top_k * 2, category_filter=category_filter
+            expanded_query, language, top_k=top_k * 2, category_filter=category_filter
         )
-        return self._rrf_fusion(vector_results, bm25_results)[:top_k]
+        fused = self._rrf_fusion(vector_results, bm25_results)
+        return self._rerank_for_query(expanded_query, fused)[:top_k]
 
     def _rrf_fusion(
         self,
@@ -71,3 +74,58 @@ class HybridRetriever:
 
     def _doc_id(self, doc: dict[str, Any]) -> str:
         return str(doc.get("id") or doc.get("doc_id") or doc.get("content", "")[:80])
+
+    def _rerank_for_query(
+        self, query: str, results: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        normalized_query = normalize_for_match(query)
+        query_entities = set(
+            extract_drug_entities(
+                normalized_query,
+                [
+                "warfarin",
+                "ibuprofen",
+                "acetaminophen",
+                "paracetamol",
+                "metformin",
+                "insulin",
+                "aspirin",
+                "omeprazole",
+                "famotidine",
+                "phenytoin",
+                "panadol",
+                "tylenol",
+                ],
+            )
+        )
+        asks_side_effects = any(
+            phrase in normalized_query
+            for phrase in ["side effect", "side effects", "adverse effect", "tac dung phu"]
+        )
+        side_effect_cues = [
+            "tac dung phu",
+            "neu ban gap",
+            "goi bac si",
+            "trieu chung",
+            "side effects",
+            "if you experience",
+            "call your doctor",
+            "symptoms",
+        ]
+
+        reranked = []
+        for result in results:
+            metadata = result.get("metadata", {})
+            entity = normalize_for_match(str(metadata.get("entity", "")))
+            content = normalize_for_match(result.get("content", ""))
+            boost = 0.0
+            if query_entities:
+                if entity in query_entities or any(e in content for e in query_entities):
+                    boost += 0.03
+                else:
+                    boost -= 0.02
+            if asks_side_effects and any(cue in content for cue in side_effect_cues):
+                boost += 0.01
+            reranked.append({**result, "rerank_score": result.get("fused_score", 0.0) + boost})
+
+        return sorted(reranked, key=lambda item: item.get("rerank_score", 0.0), reverse=True)

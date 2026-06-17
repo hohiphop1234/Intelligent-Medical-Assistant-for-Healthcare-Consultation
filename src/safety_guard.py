@@ -83,9 +83,9 @@ OUT_OF_SCOPE_RESPONSES = {
 
 INSUFFICIENT_EVIDENCE_RESPONSES = {
     "vi": (
-        "Toi khong tim duoc du thong tin dang tin cay de tra loi cau hoi nay "
-        "mot cach an toan.\n\n"
-        "Vui long tham khao bac si, duoc si, hoac nguon y te chinh thong."
+        "Tôi không tìm được đủ thông tin đáng tin cậy để trả lời câu hỏi này "
+        "một cách an toàn.\n\n"
+        "Vui lòng tham khảo bác sĩ, dược sĩ, hoặc nguồn y tế chính thống."
     ),
     "en": (
         "I could not find enough reliable evidence to answer this question safely.\n\n"

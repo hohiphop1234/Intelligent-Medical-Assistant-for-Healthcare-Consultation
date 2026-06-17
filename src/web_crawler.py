@@ -49,11 +49,13 @@ class WebCrawler:
             soup = BeautifulSoup(html, "html.parser")
             for anchor in soup.find_all("a", href=True):
                 href = urljoin(search_url, anchor["href"])
-                if self._allowed(href) and href not in links:
+                if self._allowed(href) and not self._is_search_result_url(href) and href not in links:
                     links.append(href)
         return links
 
     def _fetch_page(self, url: str) -> str | None:
+        if self._is_search_result_url(url):
+            return None
         html = self._get(url)
         if not html:
             return None
@@ -63,7 +65,11 @@ class WebCrawler:
         main = soup.find("article") or soup.find("main") or soup.body
         if not main:
             return None
-        return main.get_text(separator=" ", strip=True)
+        text = main.get_text(separator=" ", strip=True)
+        normalized = text.lower()
+        if "search results for:" in normalized or "no drug package labels found" in normalized:
+            return None
+        return text
 
     def _get(self, url: str) -> str | None:
         if not self._allowed(url):
@@ -113,6 +119,16 @@ class WebCrawler:
     def _allowed(self, url: str) -> bool:
         host = urlparse(url).netloc.lower()
         return any(host == domain or host.endswith("." + domain) for domain in CRAWL_WHITELIST)
+
+    def _is_search_result_url(self, url: str) -> bool:
+        parsed = urlparse(url)
+        path = parsed.path.lower()
+        query = parsed.query.lower()
+        return (
+            "search.cfm" in path
+            or "query-meta" in path
+            or "search" in path and "query=" in query
+        )
 
     def _rate_limit(self) -> None:
         min_interval = 1.0 / max(CRAWL_RATE_LIMIT, 0.1)

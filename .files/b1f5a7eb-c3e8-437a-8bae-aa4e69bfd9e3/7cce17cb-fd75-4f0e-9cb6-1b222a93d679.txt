@@ -1,4 +1,4 @@
 Source: MedlinePlus Drug Information
 URL: https://medlineplus.gov/druginfo/meds/a682277.html
 Section: Before taking warfarin,
-Score: 0.0151
+Score: 0.0062

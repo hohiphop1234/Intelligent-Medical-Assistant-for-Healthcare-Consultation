@@ -9,6 +9,17 @@ from pathlib import Path
 from typing import Any, Iterable
 
 
+DRUG_ALIASES = {
+    "panadol": "acetaminophen",
+    "tylenol": "acetaminophen",
+    "paracetamol": "acetaminophen",
+}
+
+DRUG_EXPANSIONS = {
+    "acetaminophen": ["acetaminophen", "paracetamol"],
+}
+
+
 def ensure_dir(path: str | Path) -> Path:
     directory = Path(path)
     directory.mkdir(parents=True, exist_ok=True)
@@ -55,6 +66,49 @@ def normalize_for_match(text: str) -> str:
 def tokenize(text: str) -> list[str]:
     normalized = normalize_for_match(text)
     return [token for token in normalized.split() if len(token) > 1]
+
+
+def canonicalize_drug_name(name: str) -> str:
+    normalized = normalize_for_match(name)
+    return DRUG_ALIASES.get(normalized, normalized)
+
+
+def extract_drug_entities(text: str, known_drugs: Iterable[str]) -> list[str]:
+    normalized = normalize_for_match(text)
+    entities = set()
+    for drug in known_drugs:
+        normalized_drug = normalize_for_match(drug)
+        if normalized_drug in normalized:
+            entities.add(canonicalize_drug_name(normalized_drug))
+    for alias, canonical in DRUG_ALIASES.items():
+        if alias in normalized:
+            entities.add(canonical)
+    return sorted(entities)
+
+
+def expand_query_with_drug_aliases(query: str) -> str:
+    entities = extract_drug_entities(
+        query,
+        [
+            "warfarin",
+            "ibuprofen",
+            "acetaminophen",
+            "paracetamol",
+            "metformin",
+            "insulin",
+            "aspirin",
+            "omeprazole",
+            "famotidine",
+            "phenytoin",
+        ],
+    )
+    extra_terms = []
+    for entity in entities:
+        extra_terms.extend(DRUG_EXPANSIONS.get(entity, [entity]))
+    extra_terms = [term for term in dict.fromkeys(extra_terms) if term not in normalize_for_match(query)]
+    if not extra_terms:
+        return query
+    return f"{query} {' '.join(extra_terms)}"
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:

@@ -26,7 +26,14 @@ from src.web_crawler import WebCrawler
 
 
 BM25_INDEX_PATH = str(Path("models") / "bm25_index.pkl")
-FILTERABLE_CATEGORIES = {"drug_safety", "disease_knowledge", "overdose_triage"}
+FILTERABLE_CATEGORIES = {
+    "drug_safety",
+    "disease_knowledge",
+    "overdose_triage",
+    "pregnancy",
+    "pediatric",
+    "elderly",
+}
 
 
 class MedicalRAGPipeline:

@@ -11,7 +11,7 @@ from config import (
     OPENROUTER_BASE_URL,
 )
 from src.safety_guard import SafetyGuard
-from src.utils import normalize_for_match, safe_json_loads
+from src.utils import extract_drug_entities, normalize_for_match, safe_json_loads
 
 try:
     from openai import OpenAI
@@ -29,6 +29,8 @@ KNOWN_DRUGS = [
     "aspirin",
     "omeprazole",
     "famotidine",
+    "panadol",
+    "tylenol",
 ]
 
 
@@ -100,7 +102,17 @@ Return:
         data = safe_json_loads(content) or {}
         data["language"] = language
         data["requires_rag"] = data.get("category") != "out_of_scope"
-        return self._coerce_classification(data, language)
+        classification = self._coerce_classification(data, language)
+        alias_entities = self._extract_entities(normalize_for_match(query))
+        if alias_entities:
+            classification.entities = sorted(set(classification.entities) | set(alias_entities))
+            classification.requires_rag = True
+            if classification.category == "out_of_scope":
+                classification.category = "drug_safety"
+                classification.intent = "drug_info"
+                classification.risk_level = "high"
+                classification.confidence = max(classification.confidence, 0.82)
+        return classification
 
     def _classify_with_rules(self, query: str, language: str) -> QueryClassification:
         q = normalize_for_match(query)
@@ -191,8 +203,7 @@ Return:
         )
 
     def _extract_entities(self, normalized_query: str) -> list[str]:
-        entities = [drug for drug in KNOWN_DRUGS if drug in normalized_query]
-        return sorted(set(entities))
+        return extract_drug_entities(normalized_query, KNOWN_DRUGS)
 
     def _coerce_classification(
         self, data: dict, language: str

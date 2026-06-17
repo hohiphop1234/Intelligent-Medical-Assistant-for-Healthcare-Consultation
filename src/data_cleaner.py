@@ -18,6 +18,7 @@ TOPIC_CATEGORY_MAP = {
     "overdose & triage": "overdose_triage",
     "disease knowledge": "disease_knowledge",
     "pediatric & special populations": "pediatric",
+    "pregnancy & lactation": "pregnancy",
 }
 
 CATEGORY_RISK_MAP = {
@@ -97,11 +98,11 @@ class DataCleaner:
         output_path = ensure_dir(output_dir)
 
         counts = {}
-        for language, filename, output_name in [
-            ("en", "rag_chunks.jsonl", "chunks_en.jsonl"),
-            ("vi", "rag_chunks_vi.jsonl", "chunks_vi.jsonl"),
+        for language, filenames, output_name in [
+            ("en", ["rag_chunks.jsonl"], "chunks_en.jsonl"),
+            ("vi", ["clean_rag_chunks_vi.jsonl", "rag_chunks_vi.jsonl"], "chunks_vi.jsonl"),
         ]:
-            source_file = raw_path / filename
+            source_file = self._first_existing(raw_path, filenames)
             rows = self._load_jsonl(source_file)
             cleaned_rows = [
                 cleaned
@@ -148,6 +149,10 @@ class DataCleaner:
         ]
         if "overdose" in risk_categories:
             return "overdose_triage"
+        if "pregnancy" in risk_categories or "lactation" in risk_categories:
+            return "pregnancy"
+        if "pediatric" in risk_categories:
+            return "pediatric"
         return "disease_knowledge"
 
     def _infer_risk(self, row: dict[str, Any], category: str) -> str:
@@ -174,13 +179,24 @@ class DataCleaner:
     def _resolve_raw_dir(self, raw_dir: str) -> Path:
         candidates = [Path(raw_dir), Path(RAW_DATA_FALLBACK_DIR)]
         for candidate in candidates:
-            if (candidate / "rag_chunks.jsonl").exists() and (
-                candidate / "rag_chunks_vi.jsonl"
-            ).exists():
+            has_english = (candidate / "rag_chunks.jsonl").exists()
+            has_vietnamese = (candidate / "rag_chunks_vi.jsonl").exists() or (
+                candidate / "clean_rag_chunks_vi.jsonl"
+            ).exists()
+            if has_english and has_vietnamese:
                 return candidate
         raise FileNotFoundError(
-            "Could not find rag_chunks.jsonl and rag_chunks_vi.jsonl in "
+            "Could not find rag_chunks.jsonl and Vietnamese chunks in "
             f"{raw_dir} or {RAW_DATA_FALLBACK_DIR}"
+        )
+
+    def _first_existing(self, raw_path: Path, filenames: list[str]) -> Path:
+        for filename in filenames:
+            candidate = raw_path / filename
+            if candidate.exists():
+                return candidate
+        raise FileNotFoundError(
+            f"Could not find any of {', '.join(filenames)} in {raw_path}"
         )
 
     def _load_jsonl(self, path: Path) -> list[dict[str, Any]]:
