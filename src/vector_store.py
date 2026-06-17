@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from config import COLLECTION_NAME_EN, COLLECTION_NAME_VI
+from config import COLLECTION_NAME_VI
 from src.utils import cosine_similarity, ensure_dir
 
 try:
@@ -22,15 +22,12 @@ class VectorStore:
         if self.use_chroma and chromadb is None:
             self.use_chroma = False
         self.collections: dict[str, Any] = {}
-        self._fallback_docs: dict[str, dict[str, dict[str, Any]]] = {"vi": {}, "en": {}}
+        self._fallback_docs: dict[str, dict[str, dict[str, Any]]] = {"vi": {}}
 
         if self.use_chroma:
             self.client = chromadb.PersistentClient(path=str(self.persist_dir))
             self.collections["vi"] = self.client.get_or_create_collection(
                 name=COLLECTION_NAME_VI, metadata={"hnsw:space": "cosine"}
-            )
-            self.collections["en"] = self.client.get_or_create_collection(
-                name=COLLECTION_NAME_EN, metadata={"hnsw:space": "cosine"}
             )
         else:
             self._load_fallback()
@@ -42,12 +39,16 @@ class VectorStore:
             return
         if self.use_chroma:
             collection = self.collections[language]
-            collection.upsert(
-                ids=[str(chunk["id"]) for chunk in chunks],
-                documents=[chunk["content"] for chunk in chunks],
-                embeddings=embeddings,
-                metadatas=[self._metadata(chunk) for chunk in chunks],
-            )
+            max_batch = 5000
+            for i in range(0, len(chunks), max_batch):
+                batch_chunks = chunks[i:i + max_batch]
+                batch_embeddings = embeddings[i:i + max_batch]
+                collection.upsert(
+                    ids=[str(chunk["id"]) for chunk in batch_chunks],
+                    documents=[chunk["content"] for chunk in batch_chunks],
+                    embeddings=batch_embeddings,
+                    metadatas=[self._metadata(chunk) for chunk in batch_chunks],
+                )
             return
 
         docs = self._fallback_docs[language]
@@ -64,7 +65,6 @@ class VectorStore:
         if self.use_chroma:
             for language, name in {
                 "vi": COLLECTION_NAME_VI,
-                "en": COLLECTION_NAME_EN,
             }.items():
                 try:
                     self.client.delete_collection(name)
@@ -76,8 +76,8 @@ class VectorStore:
                 )
             return
 
-        self._fallback_docs = {"vi": {}, "en": {}}
-        for language in ["vi", "en"]:
+        self._fallback_docs = {"vi": {}}
+        for language in ["vi"]:
             path = self._fallback_path(language)
             if path.exists():
                 path.unlink()
@@ -132,11 +132,9 @@ class VectorStore:
         if self.use_chroma:
             return {
                 "vi_count": self.collections["vi"].count(),
-                "en_count": self.collections["en"].count(),
             }
         return {
             "vi_count": len(self._fallback_docs["vi"]),
-            "en_count": len(self._fallback_docs["en"]),
         }
 
     def _format_chroma_results(self, results: dict[str, Any]) -> list[dict[str, Any]]:
@@ -183,7 +181,7 @@ class VectorStore:
         return self.persist_dir / f"simple_{language}.json"
 
     def _load_fallback(self) -> None:
-        for language in ["vi", "en"]:
+        for language in ["vi"]:
             path = self._fallback_path(language)
             if path.exists():
                 with open(path, "r", encoding="utf-8") as f:

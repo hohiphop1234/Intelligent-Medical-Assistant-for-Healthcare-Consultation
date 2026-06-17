@@ -98,19 +98,18 @@ class DataCleaner:
         output_path = ensure_dir(output_dir)
 
         counts = {}
-        for language, filenames, output_name in [
-            ("en", ["rag_chunks.jsonl"], "chunks_en.jsonl"),
-            ("vi", ["clean_rag_chunks_vi.jsonl", "rag_chunks_vi.jsonl"], "chunks_vi.jsonl"),
-        ]:
-            source_file = self._first_existing(raw_path, filenames)
+        vi_files = list(raw_path.glob("*vi*.jsonl")) + list(raw_path.glob("*hoangha*.jsonl"))
+        
+        all_cleaned_rows = []
+        for source_file in vi_files:
             rows = self._load_jsonl(source_file)
-            cleaned_rows = [
-                cleaned
-                for row in rows
-                if (cleaned := self.clean_chunk(row, language)) is not None
-            ]
-            write_jsonl(output_path / output_name, cleaned_rows)
-            counts[language] = len(cleaned_rows)
+            for row in rows:
+                cleaned = self.clean_chunk(row, "vi")
+                if cleaned is not None:
+                    all_cleaned_rows.append(cleaned)
+                    
+        write_jsonl(output_path / "chunks_vi.jsonl", all_cleaned_rows)
+        counts["vi"] = len(all_cleaned_rows)
         return counts
 
     def clean_chunk(self, row: dict[str, Any], language: str) -> dict[str, Any] | None:
@@ -180,11 +179,7 @@ class DataCleaner:
         candidates = self._candidate_dirs(raw_dir)
         valid_candidates = []
         for candidate in candidates:
-            has_english = (candidate / "rag_chunks.jsonl").exists()
-            has_vietnamese = (candidate / "rag_chunks_vi.jsonl").exists() or (
-                candidate / "clean_rag_chunks_vi.jsonl"
-            ).exists()
-            if has_english and has_vietnamese:
+            if any(candidate.glob("*vi*.jsonl")) or any(candidate.glob("*hoangha*.jsonl")):
                 valid_candidates.append(candidate)
         if valid_candidates:
             requested = Path(raw_dir)
@@ -192,7 +187,7 @@ class DataCleaner:
                 return requested
             return max(valid_candidates, key=self._latest_data_mtime)
         raise FileNotFoundError(
-            "Could not find rag_chunks.jsonl and Vietnamese chunks in "
+            "Could not find Vietnamese chunks in "
             + ", ".join(str(candidate) for candidate in candidates)
         )
 
@@ -217,18 +212,8 @@ class DataCleaner:
         return candidates
 
     def _latest_data_mtime(self, path: Path) -> float:
-        return max(
-            (
-                candidate.stat().st_mtime
-                for candidate in [
-                    path / "rag_chunks.jsonl",
-                    path / "rag_chunks_vi.jsonl",
-                    path / "clean_rag_chunks_vi.jsonl",
-                ]
-                if candidate.exists()
-            ),
-            default=0.0,
-        )
+        files = list(path.glob("*vi*.jsonl")) + list(path.glob("*hoangha*.jsonl"))
+        return max((f.stat().st_mtime for f in files if f.exists()), default=0.0)
 
     def _first_existing(self, raw_path: Path, filenames: list[str]) -> Path:
         for filename in filenames:

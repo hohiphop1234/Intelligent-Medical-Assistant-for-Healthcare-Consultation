@@ -132,7 +132,7 @@ class MedicalRAGPipeline:
         self.vector_store.reset()
 
         all_chunks: dict[str, list[dict[str, Any]]] = {}
-        for language in ["en", "vi"]:
+        for language in ["vi"]:
             chunks_path = Path(PROCESSED_DATA_DIR) / f"chunks_{language}.jsonl"
             chunks = load_jsonl(chunks_path)
             all_chunks[language] = chunks
@@ -144,5 +144,4 @@ class MedicalRAGPipeline:
         self.bm25_store.save(BM25_INDEX_PATH)
         stats = self.vector_store.get_stats()
         stats["bm25_vi_count"] = len(all_chunks.get("vi", []))
-        stats["bm25_en_count"] = len(all_chunks.get("en", []))
         return stats

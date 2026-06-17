@@ -5,7 +5,6 @@ import re
 from typing import Any
 
 from config import (
-    EMBEDDING_MODEL_EN,
     EMBEDDING_MODEL_VI,
     FALLBACK_EMBEDDING_DIM,
     FORCE_FALLBACK_EMBEDDINGS,
@@ -56,17 +55,7 @@ class DualEmbeddingManager:
         self._model_failed: set[str] = set()
 
     def detect_language(self, text: str) -> str:
-        normalized = normalize_for_match(text)
-        if re.search(r"[ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]", text.lower()):
-            return "vi"
-        if any(hint in normalized.split() for hint in VI_HINTS):
-            return "vi"
-        if detect is not None:
-            try:
-                return "vi" if detect(text) == "vi" else "en"
-            except Exception:
-                pass
-        return "en"
+        return "vi"
 
     def embed(self, text: str, language: str | None = None) -> list[float]:
         if language is None:
@@ -103,7 +92,7 @@ class DualEmbeddingManager:
             return None
         if language in self._models:
             return self._models[language]
-        model_name = EMBEDDING_MODEL_VI if language == "vi" else EMBEDDING_MODEL_EN
+        model_name = EMBEDDING_MODEL_VI
         try:
             self._models[language] = SentenceTransformer(model_name)
             return self._models[language]

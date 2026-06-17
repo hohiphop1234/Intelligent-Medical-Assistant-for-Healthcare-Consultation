@@ -22,7 +22,6 @@ LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "2048"))
 EMBEDDING_MODEL_VI = os.getenv(
     "EMBEDDING_MODEL_VI", "Dqdung205/medical_vietnamese_embedding"
 )
-EMBEDDING_MODEL_EN = os.getenv("EMBEDDING_MODEL_EN", "BAAI/bge-m3")
 FALLBACK_EMBEDDING_DIM = int(os.getenv("FALLBACK_EMBEDDING_DIM", "384"))
 FORCE_FALLBACK_EMBEDDINGS = (
     os.getenv("FORCE_FALLBACK_EMBEDDINGS", "false").lower() == "true"
@@ -31,7 +30,6 @@ FORCE_FALLBACK_EMBEDDINGS = (
 # Vector store
 CHROMA_PERSIST_DIR = str(BASE_DIR / "models" / "chromadb")
 COLLECTION_NAME_VI = "medical_rag_vi"
-COLLECTION_NAME_EN = "medical_rag_en"
 
 # Retrieval
 TOP_K = int(os.getenv("TOP_K", "5"))
@@ -41,7 +39,7 @@ EVIDENCE_THRESHOLD = float(os.getenv("EVIDENCE_THRESHOLD", "0.5"))
 MIN_EVIDENCE_CHUNKS = int(os.getenv("MIN_EVIDENCE_CHUNKS", "2"))
 
 # Data paths
-RAW_DATA_DIR = str(BASE_DIR / "data" / "raw")
+RAW_DATA_DIR = str(BASE_DIR / "data" / "rag_processed")
 PROCESSED_DATA_DIR = str(BASE_DIR / "data" / "processed")
 CATEGORIES_PATH = str(BASE_DIR / "data" / "categories.json")
 RAW_DATA_FALLBACK_DIR = str(Path.home() / "Downloads" / "rag_processed")

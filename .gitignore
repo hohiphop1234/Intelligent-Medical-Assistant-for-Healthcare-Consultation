@@ -11,3 +11,4 @@ data/crawl_cache/
 data/
 *.jsonl
 *.parquet
+.files
