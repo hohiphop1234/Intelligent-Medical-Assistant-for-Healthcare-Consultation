@@ -2,16 +2,16 @@ from __future__ import annotations
 
 import chainlit as cl
 
-from src.rag_pipeline import MedicalRAGPipeline
+from src.langgraph_pipeline import LangGraphPipeline
 
 
-pipeline: MedicalRAGPipeline | None = None
+pipeline: LangGraphPipeline | None = None
 
 
-def get_pipeline() -> MedicalRAGPipeline:
+def get_pipeline() -> LangGraphPipeline:
     global pipeline
     if pipeline is None:
-        pipeline = MedicalRAGPipeline()
+        pipeline = LangGraphPipeline()
     return pipeline
 
 
@@ -39,7 +39,7 @@ async def set_starters():
 
 @cl.on_chat_start
 async def on_chat_start():
-    stats = get_pipeline().vector_store.get_stats()
+    stats = get_pipeline().rag_pipeline.vector_store.get_stats()
     await cl.Message(
         content=(
             "Medical Assistant ready.\n\n"

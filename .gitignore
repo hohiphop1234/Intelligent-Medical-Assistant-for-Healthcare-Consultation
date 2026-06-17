@@ -12,3 +12,4 @@ data/
 *.jsonl
 *.parquet
 .files
+ckpt
