@@ -43,7 +43,7 @@ async def on_chat_start():
     await cl.Message(
         content=(
             "Medical Assistant ready.\n\n"
-            f"Dataset: {stats['vi_count']} VI chunks + {stats['en_count']} EN chunks\n"
+            f"Dataset: {stats['vi_count']} Medical Cases\n"
             "Search: Hybrid vector + BM25\n"
             "Safety: emergency, scope, evidence, citations"
         )
