@@ -10,6 +10,7 @@ from config import (
     OPENROUTER_API_KEY,
     OPENROUTER_BASE_URL,
 )
+from src.topic_relevance import pregnancy_hard_reject, pregnancy_relevance_bonus
 from src.utils import normalize_for_match, tokenize
 
 try:
@@ -57,6 +58,8 @@ class EvidenceGrader:
             if best_score >= 0.25:
                 relevant.append({**best, "relevance_score": best_score})
 
+        relevant.sort(key=lambda item: item.get("relevance_score", 0.0), reverse=True)
+
         average = sum(item.get("relevance_score", 0.0) for item in relevant) / max(
             len(relevant), 1
         )
@@ -70,18 +73,32 @@ class EvidenceGrader:
         )
 
     def _score_single(self, question: str, chunk: dict[str, Any]) -> float:
+        if self._entity_mismatch(question, chunk):
+            return 0.0
+        if pregnancy_hard_reject(
+            question, chunk.get("content", ""), chunk.get("metadata", {})
+        ):
+            return 0.0
+        rule_score = self._grade_single_rules(question, chunk)
         if self.client is not None:
             try:
-                return 1.0 if self._grade_single_llm(question, chunk["content"]) else 0.0
+                if self._grade_single_llm(question, chunk["content"]):
+                    return max(rule_score, 0.8)
+                return min(rule_score, 0.2)
             except Exception:
                 pass
-        return self._grade_single_rules(question, chunk)
+        return rule_score
 
     def _grade_single_llm(self, question: str, chunk_content: str) -> bool:
         prompt = (
             f"Question: {question}\n\n"
             f"Document:\n{chunk_content[:800]}\n\n"
             "Is this document relevant and useful for answering the question? "
+            "For pregnancy questions, mark breastfeeding/lactation/postpartum/milk-only "
+            "documents irrelevant unless the question asks about breastfeeding. "
+            "For questions asking what medicines to avoid in pregnancy, the document "
+            "must directly discuss pregnancy, fetal/unborn-baby risk, contraindication, "
+            "or avoiding a medicine during pregnancy. "
             "Answer only relevant or irrelevant."
         )
         response = self.client.chat.completions.create(
@@ -111,11 +128,12 @@ class EvidenceGrader:
             return min(0.2, overlap * 0.4)
 
         entity_bonus = 0.3 if entity_matches_query or content_has_query_entity else 0.0
+        topic_bonus = pregnancy_relevance_bonus(question, chunk.get("content", ""), metadata)
         search_score = float(
             chunk.get("score", chunk.get("vector_score", chunk.get("fused_score", 0.0))) or 0.0
         )
         search_bonus = min(max(search_score, 0.0), 1.0) * 0.2
-        return min(1.0, overlap * 0.7 + entity_bonus + search_bonus)
+        return min(1.0, overlap * 0.7 + entity_bonus + topic_bonus + search_bonus)
 
     def _query_entities(self, question: str) -> set[str]:
         normalized = normalize_for_match(question)
@@ -132,3 +150,15 @@ class EvidenceGrader:
             "phenytoin",
         }
         return {entity for entity in known if entity in normalized}
+
+    def _entity_mismatch(self, question: str, chunk: dict[str, Any]) -> bool:
+        query_entities = self._query_entities(question)
+        if not query_entities:
+            return False
+        metadata = chunk.get("metadata", {})
+        entity = normalize_for_match(str(metadata.get("entity") or chunk.get("entity", "")))
+        content = normalize_for_match(chunk.get("content", ""))
+        return not (
+            entity in query_entities
+            or any(entity_name in content for entity_name in query_entities)
+        )

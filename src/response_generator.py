@@ -11,6 +11,13 @@ from config import (
     OPENROUTER_BASE_URL,
 )
 from src.query_router import QueryClassification
+from src.topic_relevance import (
+    asks_drug_avoidance,
+    has_pregnancy_context,
+    has_pregnancy_risk_or_avoidance,
+    is_lactation_query,
+    is_pregnancy_query,
+)
 from src.utils import normalize_for_match, tokenize
 
 try:
@@ -27,6 +34,7 @@ Follow these rules strictly:
 4. Never diagnose, prescribe, or recommend personal dosages.
 5. Recommend consulting a healthcare professional.
 6. Use the same language as the user question.
+7. For pregnancy questions, do not use breastfeeding, lactation, milk, or postpartum evidence unless the user asks about breastfeeding.
 """
 
 
@@ -78,7 +86,9 @@ class ResponseGenerator:
         prompt = (
             f"Context documents:\n{context}\n\n"
             f"User question: {question}\n\n"
-            "Answer using only the context above. Cite sources with [1], [2], etc."
+            "Answer using only the context above. Cite sources with [1], [2], etc. "
+            "Ignore citation numbers that appear inside a context document; only use "
+            "the source numbers assigned to the context documents."
         )
         response = self.client.chat.completions.create(
             model=LLM_MODEL,
@@ -129,8 +139,9 @@ class ResponseGenerator:
                 return side_effect_answer
 
         evidence = []
-        for chunk in chunks[:4]:
+        for chunk in self._dedupe_chunks_for_answer(chunks)[:4]:
             sentence = self._best_sentence(question, chunk.get("content", ""))
+            sentence = self._clean_extractive_sentence(sentence)
             if self._is_generic_side_effect_sentence(question, sentence):
                 continue
             if self._is_side_effect_question(question):
@@ -155,6 +166,25 @@ class ResponseGenerator:
         ]
         used_chunks = [chunk for chunk, _ in evidence]
         return intro + "\n\n" + "\n".join(bullets) + "\n\n" + closing, used_chunks
+
+    def _dedupe_chunks_for_answer(
+        self, chunks: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        deduped = []
+        seen = set()
+        for chunk in chunks:
+            metadata = chunk.get("metadata", {})
+            key = (
+                normalize_for_match(str(metadata.get("entity", "")))
+                or normalize_for_match(str(metadata.get("title", "")))
+                or normalize_for_match(str(metadata.get("url", "")))
+                or normalize_for_match(chunk.get("content", "")[:120])
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(chunk)
+        return deduped
 
     def _generate_side_effect_answer(
         self,
@@ -302,7 +332,7 @@ class ResponseGenerator:
         return ""
 
     def _best_sentence(self, question: str, content: str) -> str:
-        sentences = re.split(r"(?<=[.!?])\s+", content)
+        sentences = re.split(r"(?<=[.!?])\s+|\s+\*\s+", content)
         stopwords = {
             "what",
             "are",
@@ -323,6 +353,11 @@ class ResponseGenerator:
             term for term in tokenize(question) if term not in stopwords
         }
         normalized_question = normalize_for_match(question)
+        asks_pregnancy = is_pregnancy_query(question) and not is_lactation_query(question)
+        asks_pregnancy_avoidance = (
+            asks_pregnancy
+            and asks_drug_avoidance(question)
+        )
         asks_side_effects = any(
             phrase in normalized_question
             for phrase in [
@@ -383,8 +418,31 @@ class ResponseGenerator:
         best_sentence = ""
         best_score = -1
         for sentence in sentences[:40]:
+            if asks_pregnancy_avoidance and not has_pregnancy_risk_or_avoidance(
+                sentence
+            ):
+                continue
+            if (
+                asks_pregnancy
+                and not asks_pregnancy_avoidance
+                and not has_pregnancy_context(sentence)
+            ):
+                continue
             terms = set(tokenize(sentence))
             score = len(query_terms & terms) * 2
+            if asks_pregnancy and has_pregnancy_context(sentence):
+                score += 8
+            if asks_pregnancy_avoidance:
+                normalized_sentence = normalize_for_match(sentence)
+                if "thai nhi" in normalized_sentence or "fetus" in normalized_sentence:
+                    score += 10
+                if "tuan thu 20" in normalized_sentence or "20 weeks" in normalized_sentence:
+                    score += 8
+                if (
+                    "tranh thai" in normalized_sentence
+                    or "birth control" in normalized_sentence
+                ):
+                    score -= 8
             if asks_side_effects:
                 symptom_hits = len(side_effect_terms & terms)
                 normalized_sentence = normalize_for_match(sentence)
@@ -408,6 +466,12 @@ class ResponseGenerator:
                 best_sentence = sentence
                 best_score = score
         return best_sentence[:600].strip()
+
+    def _clean_extractive_sentence(self, sentence: str) -> str:
+        sentence = re.sub(r"\[\d+(?:[-,]\d+)*\]", "", sentence)
+        sentence = re.sub(r"\[(?:PMC|PubMed|CrossRef)[^\]]*\]", "", sentence, flags=re.IGNORECASE)
+        sentence = re.sub(r"\s+", " ", sentence)
+        return sentence.strip(" .;:-")
 
     def _is_generic_side_effect_sentence(self, question: str, sentence: str) -> bool:
         if not self._is_side_effect_question(question):

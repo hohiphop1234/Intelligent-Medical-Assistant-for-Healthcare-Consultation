@@ -20,6 +20,7 @@ from src.query_router import QueryRouter
 from src.response_generator import ResponseGenerator
 from src.response_validator import ResponseValidator
 from src.safety_guard import SafetyGuard
+from src.topic_relevance import asks_drug_avoidance, should_route_pregnancy_to_drug_safety
 from src.utils import ensure_dir, load_jsonl
 from src.vector_store import VectorStore
 from src.web_crawler import WebCrawler
@@ -67,15 +68,12 @@ class MedicalRAGPipeline:
         if classification.confidence < CONFIDENCE_THRESHOLD:
             return self.safety_guard.insufficient_evidence_response(question, language)
 
-        category_filter = (
-            classification.category
-            if classification.category in FILTERABLE_CATEGORIES
-            else None
-        )
+        category_filter = self._retrieval_category_filter(question, classification)
+        search_top_k = self._retrieval_top_k(question, classification)
         results = self.hybrid_retriever.search(
             question,
             language=language,
-            top_k=TOP_K,
+            top_k=search_top_k,
             category_filter=category_filter,
         )
 
@@ -100,6 +98,29 @@ class MedicalRAGPipeline:
         response["retrieved_count"] = len(results)
         response["relevant_count"] = len(graded.relevant_chunks)
         return self.response_validator.validate(response, graded.relevant_chunks)
+
+    def _retrieval_category_filter(
+        self, question: str, classification
+    ) -> str | None:
+        if classification.category == "pregnancy" and should_route_pregnancy_to_drug_safety(
+            question
+        ):
+            return "drug_safety"
+        return (
+            classification.category
+            if classification.category in FILTERABLE_CATEGORIES
+            else None
+        )
+
+    def _retrieval_top_k(self, question: str, classification) -> int:
+        if (
+            classification.category == "pregnancy"
+            and should_route_pregnancy_to_drug_safety(question)
+            and asks_drug_avoidance(question)
+            and not classification.entities
+        ):
+            return TOP_K * 4
+        return TOP_K
 
     def ingest_data(self) -> dict[str, int]:
         ensure_dir(PROCESSED_DATA_DIR)

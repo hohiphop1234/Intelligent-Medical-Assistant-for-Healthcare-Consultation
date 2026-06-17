@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from config import BM25_WEIGHT, TOP_K, VECTOR_WEIGHT
+from src.topic_relevance import pregnancy_hard_reject, pregnancy_relevance_bonus
 from src.utils import expand_query_with_drug_aliases, extract_drug_entities, normalize_for_match
 
 
@@ -121,11 +122,17 @@ class HybridRetriever:
             boost = 0.0
             if query_entities:
                 if entity in query_entities or any(e in content for e in query_entities):
-                    boost += 0.03
+                    boost += 0.12
                 else:
-                    boost -= 0.02
+                    boost -= 0.25
             if asks_side_effects and any(cue in content for cue in side_effect_cues):
                 boost += 0.01
+            if pregnancy_hard_reject(query, result.get("content", ""), metadata):
+                boost -= 0.08
+            else:
+                boost += pregnancy_relevance_bonus(
+                    query, result.get("content", ""), metadata
+                )
             reranked.append({**result, "rerank_score": result.get("fused_score", 0.0) + boost})
 
         return sorted(reranked, key=lambda item: item.get("rerank_score", 0.0), reverse=True)
