@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from config import RAW_DATA_FALLBACK_DIR
+from config import RAW_DATA_FALLBACK_DIRS
 from src.utils import ensure_dir, normalize_for_match, stable_hash, write_jsonl
 
 try:
@@ -177,17 +177,57 @@ class DataCleaner:
         return f"{language}-{stable_hash(seed, 20)}"
 
     def _resolve_raw_dir(self, raw_dir: str) -> Path:
-        candidates = [Path(raw_dir), Path(RAW_DATA_FALLBACK_DIR)]
+        candidates = self._candidate_dirs(raw_dir)
+        valid_candidates = []
         for candidate in candidates:
             has_english = (candidate / "rag_chunks.jsonl").exists()
             has_vietnamese = (candidate / "rag_chunks_vi.jsonl").exists() or (
                 candidate / "clean_rag_chunks_vi.jsonl"
             ).exists()
             if has_english and has_vietnamese:
-                return candidate
+                valid_candidates.append(candidate)
+        if valid_candidates:
+            requested = Path(raw_dir)
+            if requested in valid_candidates:
+                return requested
+            return max(valid_candidates, key=self._latest_data_mtime)
         raise FileNotFoundError(
             "Could not find rag_chunks.jsonl and Vietnamese chunks in "
-            f"{raw_dir} or {RAW_DATA_FALLBACK_DIR}"
+            + ", ".join(str(candidate) for candidate in candidates)
+        )
+
+    def _candidate_dirs(self, raw_dir: str) -> list[Path]:
+        candidates: list[Path] = []
+        seen: set[Path] = set()
+
+        def add(candidate: str | Path) -> None:
+            path = Path(candidate).expanduser()
+            variants = [path]
+            if path.name != "rag_processed":
+                variants.extend([path / "rag_processed", path / "processed", path / "raw"])
+            for variant in variants:
+                normalized = variant.resolve() if variant.exists() else variant
+                if normalized not in seen:
+                    seen.add(normalized)
+                    candidates.append(variant)
+
+        add(raw_dir)
+        for fallback in RAW_DATA_FALLBACK_DIRS:
+            add(fallback)
+        return candidates
+
+    def _latest_data_mtime(self, path: Path) -> float:
+        return max(
+            (
+                candidate.stat().st_mtime
+                for candidate in [
+                    path / "rag_chunks.jsonl",
+                    path / "rag_chunks_vi.jsonl",
+                    path / "clean_rag_chunks_vi.jsonl",
+                ]
+                if candidate.exists()
+            ),
+            default=0.0,
         )
 
     def _first_existing(self, raw_path: Path, filenames: list[str]) -> Path:

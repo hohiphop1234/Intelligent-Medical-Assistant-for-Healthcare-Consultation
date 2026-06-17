@@ -112,6 +112,32 @@ def test_specific_drug_question_rejects_other_drug_pregnancy_warning():
     assert result.relevant_chunks[0]["metadata"]["entity"] == "Acetaminophen"
 
 
+def test_interaction_question_prefers_interaction_evidence():
+    grader = EvidenceGrader(use_llm=False)
+    question = "Can I take ibuprofen with warfarin?"
+    chunks = [
+        {
+            "content": "Warfarin comes as a tablet to take by mouth once a day.",
+            "metadata": {"entity": "Warfarin", "category": "drug_safety"},
+            "score": 0.9,
+        },
+        {
+            "content": (
+                "NSAIDs such as ibuprofen may interact with warfarin. Do not start "
+                "ibuprofen while taking warfarin without discussing it with your healthcare provider."
+            ),
+            "metadata": {"entity": "Warfarin", "category": "drug_safety"},
+            "score": 0.8,
+        },
+    ]
+
+    result = grader.grade(question, chunks)
+
+    assert len(result.relevant_chunks) == 1
+    assert "ibuprofen" in result.relevant_chunks[0]["content"].lower()
+    assert result.relevant_chunks[0]["relevance_score"] >= 0.5
+
+
 def test_pregnancy_medication_query_routes_to_drug_safety():
     assert should_route_pregnancy_to_drug_safety(
         "phụ nữ có thai không nên uống thuốc gì"
