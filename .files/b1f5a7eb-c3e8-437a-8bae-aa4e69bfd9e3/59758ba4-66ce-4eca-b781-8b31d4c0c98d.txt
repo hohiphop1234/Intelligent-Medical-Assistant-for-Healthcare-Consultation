@@ -1,4 +1,0 @@
-Source: MedlinePlus Drug Information
-URL: https://medlineplus.gov/druginfo/meds/a682403.html
-Section: Before taking rifampin,
-Score: 0.0153
