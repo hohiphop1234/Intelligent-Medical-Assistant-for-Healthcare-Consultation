@@ -151,7 +151,7 @@ Return:
                 "critical",
                 0.9,
             )
-        elif any(term in q for term in ["mang thai", "thai ky", "pregnant", "pregnancy", "breastfeeding", "cho con bu"]):
+        elif any(term in q for term in ["mang thai", "thai ky", "pregnant", "pregnancy", "breastfeeding", "cho con bu", "co thai", "ba bau"]):
             category, intent, risk, confidence = (
                 "pregnancy",
                 "special_population",
