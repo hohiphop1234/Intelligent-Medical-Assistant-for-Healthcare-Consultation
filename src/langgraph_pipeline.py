@@ -15,7 +15,6 @@ class MedicalState(TypedDict):
     State chung cho toàn bộ quá trình trả lời câu hỏi y tế.
     """
     question: str
-    language: str
     
     # Kết quả từ Classifier
     category: Optional[str]
@@ -104,33 +103,29 @@ class LangGraphPipeline:
     def safety_check_node(self, state: MedicalState) -> MedicalState:
         """Kiểm tra câu hỏi có phải cấp cứu hay không"""
         question = state["question"]
-        language = state.get("language") or self.embedding_manager.detect_language(question)
         
         if self.safety_guard.is_emergency(question):
-            emergency_resp = self.safety_guard.emergency_response(question, language)
+            emergency_resp = self.safety_guard.emergency_response(question)
             return {
                 **state,
-                "language": language,
-                "answer": emergency_resp["answer"],
+                "answer": emergency_resp["message"],
                 "safety_alert": True
             }
             
         return {
             **state,
-            "language": language,
             "safety_alert": False
         }
         
     def classifier_node(self, state: MedicalState) -> MedicalState:
         """Phân loại câu hỏi để quyết định đi nhánh nào"""
         question = state["question"]
-        language = state["language"]
         
-        classification = self.query_router.classify(question, language)
+        classification = self.query_router.classify(question)
         
         # Xử lý out of scope hoặc thiếu dữ kiện
         if classification.category == "out_of_scope":
-            out_resp = self.safety_guard.out_of_scope_response(question, language)
+            out_resp = self.safety_guard.out_of_scope_response(question)
             return {
                 **state,
                 "category": classification.category,
@@ -140,7 +135,7 @@ class LangGraphPipeline:
             }
             
         if classification.confidence < CONFIDENCE_THRESHOLD:
-            insuf_resp = self.safety_guard.insufficient_evidence_response(question, language)
+            insuf_resp = self.safety_guard.insufficient_evidence_response(question)
             return {
                 **state,
                 "category": classification.category,
@@ -231,7 +226,6 @@ class LangGraphPipeline:
         """Entrypoint cho toàn bộ đồ thị"""
         initial_state = {
             "question": question,
-            "language": "",
             "category": None,
             "risk_level": None,
             "entities": None,
@@ -265,7 +259,6 @@ class LangGraphPipeline:
             "category": final_state.get("category", "unknown"),
             "route": final_state.get("route", "rag"),
             "classification_confidence": final_state.get("confidence", 0.0),
-            "language": final_state.get("language", "vi"),
             "confidence": final_state.get("evidence_score", 0.0),
             "evidence_score": final_state.get("evidence_score", 0.0),
             "retrieved_count": final_state.get("retrieved_count", 0),

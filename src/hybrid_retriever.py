@@ -18,23 +18,19 @@ class HybridRetriever:
     def search(
         self,
         query: str,
-        language: str | None = None,
         top_k: int = TOP_K,
         category_filter: str | None = None,
     ) -> list[dict[str, Any]]:
-        if language is None:
-            language = self.embeddings.detect_language(query)
 
         expanded_query = expand_query_with_drug_aliases(query)
-        query_embedding = self.embeddings.embed(expanded_query, language)
+        query_embedding = self.embeddings.embed(expanded_query)
         vector_results = self.vector_store.search(
             query_embedding,
-            language,
             top_k=top_k * 2,
             category_filter=category_filter,
         )
         bm25_results = self.bm25.search(
-            expanded_query, language, top_k=top_k * 2, category_filter=category_filter
+            expanded_query, top_k=top_k * 2, category_filter=category_filter
         )
         fused = self._rrf_fusion(vector_results, bm25_results)
         return self._rerank_for_query(expanded_query, fused)[:top_k]

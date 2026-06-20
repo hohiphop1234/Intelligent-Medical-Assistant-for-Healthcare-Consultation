@@ -1,14 +1,13 @@
-# Intelligent Medical Assistant
+# Trợ lý Y tế Thông minh
 
-This assistant is an educational medical RAG prototype.
+Đây là một nguyên mẫu RAG y tế giáo dục.
 
-It can help with:
+Trợ lý có thể hỗ trợ về:
 
-- Drug information and side effects
-- Drug interactions
-- Disease and condition information
-- Pregnancy and medication caution
-- Pediatric and elderly care caution
+- Thông tin thuốc và tác dụng phụ
+- Tương tác thuốc
+- Thông tin về bệnh lý
+- Lưu ý về thai kỳ và thuốc
+- Lưu ý chăm sóc trẻ em và người cao tuổi
 
-Important: this information is for reference only and does not replace
-professional medical advice.
+Quan trọng: Thông tin này chỉ mang tính tham khảo và không thay thế tư vấn y khoa chuyên nghiệp.

@@ -40,31 +40,30 @@ class QwenMedicalLLM:
 
         print(f"[*] Đang tải mô hình gốc {self.base_model_name} (4-bit)...")
         # Cấu hình lượng tử hóa (Quantization) 4-bit để tiết kiệm VRAM
-        bnb_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_use_double_quant=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.float16
-        )
+        try:
+            # 1. Tải Base Model
+            # Mô hình unsloth-bnb-4bit đã có sẵn quantization config, việc ép device_map={"": 0} sẽ tránh việc transformers tự đẩy sang CPU gây lỗi
+            self.tokenizer = AutoTokenizer.from_pretrained(self.base_model_name)
+            base_model = AutoModelForCausalLM.from_pretrained(
+                self.base_model_name,
+                device_map={"": 0},
+                trust_remote_code=True
+            )
 
-        # 1. Tải Base Model
-        self.tokenizer = AutoTokenizer.from_pretrained(self.base_model_name)
-        base_model = AutoModelForCausalLM.from_pretrained(
-            self.base_model_name,
-            quantization_config=bnb_config,
-            device_map="auto",
-            trust_remote_code=True
-        )
-
-        # 2. Gắn LoRA Adapter
-        lora_path = os.path.abspath(LORA_CHECKPOINT_DIR)
-        print(f"[*] Đang gắn LoRA Adapter từ {lora_path}...")
-        self.model = PeftModel.from_pretrained(base_model, lora_path)
-        
-        # Đặt model ở chế độ suy luận (Inference)
-        self.model.eval()
-        self._is_loaded = True
-        print("[+] Hoàn tất tải Qwen Medical LLM!")
+            # 2. Gắn LoRA Adapter
+            lora_path = os.path.abspath(LORA_CHECKPOINT_DIR)
+            print(f"[*] Đang gắn LoRA Adapter từ {lora_path}...")
+            self.model = PeftModel.from_pretrained(base_model, lora_path)
+            
+            # Đặt model ở chế độ suy luận (Inference)
+            self.model.eval()
+            self._is_loaded = True
+            print("[+] Hoàn tất tải Qwen Medical LLM!")
+        except Exception as e:
+            print(f"[-] Lỗi tải mô hình LLM cục bộ: {e}")
+            self.model = None
+            self.tokenizer = None
+            self._is_loaded = True  # Đánh dấu đã tải (thất bại) để không thử lại liên tục
 
     def generate_answer(self, question: str, max_new_tokens: int = 512, system_prompt: str = None) -> str:
         """

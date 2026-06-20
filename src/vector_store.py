@@ -21,29 +21,28 @@ class VectorStore:
         self.use_chroma = chromadb is not None if use_chroma is None else use_chroma
         if self.use_chroma and chromadb is None:
             self.use_chroma = False
-        self.collections: dict[str, Any] = {}
-        self._fallback_docs: dict[str, dict[str, dict[str, Any]]] = {"vi": {}}
+        self.collection: Any = None
+        self._fallback_docs: dict[str, dict[str, Any]] = {}
 
         if self.use_chroma:
             self.client = chromadb.PersistentClient(path=str(self.persist_dir))
-            self.collections["vi"] = self.client.get_or_create_collection(
+            self.collection = self.client.get_or_create_collection(
                 name=COLLECTION_NAME_VI, metadata={"hnsw:space": "cosine"}
             )
         else:
             self._load_fallback()
 
     def add_documents(
-        self, chunks: list[dict[str, Any]], embeddings: list[list[float]], language: str
+        self, chunks: list[dict[str, Any]], embeddings: list[list[float]]
     ) -> None:
         if not chunks:
             return
         if self.use_chroma:
-            collection = self.collections[language]
             max_batch = 5000
             for i in range(0, len(chunks), max_batch):
                 batch_chunks = chunks[i:i + max_batch]
                 batch_embeddings = embeddings[i:i + max_batch]
-                collection.upsert(
+                self.collection.upsert(
                     ids=[str(chunk["id"]) for chunk in batch_chunks],
                     documents=[chunk["content"] for chunk in batch_chunks],
                     embeddings=batch_embeddings,
@@ -51,51 +50,44 @@ class VectorStore:
                 )
             return
 
-        docs = self._fallback_docs[language]
         for chunk, embedding in zip(chunks, embeddings):
-            docs[str(chunk["id"])] = {
+            self._fallback_docs[str(chunk["id"])] = {
                 "content": chunk["content"],
                 "embedding": embedding,
                 "metadata": self._metadata(chunk),
             }
-        self._save_fallback(language)
+        self._save_fallback()
 
     def reset(self) -> None:
         """Clear persisted vector collections before a full re-ingest."""
         if self.use_chroma:
-            for language, name in {
-                "vi": COLLECTION_NAME_VI,
-            }.items():
-                try:
-                    self.client.delete_collection(name)
-                except Exception:
-                    pass
-                self.collections[language] = self.client.get_or_create_collection(
-                    name=name,
-                    metadata={"hnsw:space": "cosine"},
-                )
+            try:
+                self.client.delete_collection(COLLECTION_NAME_VI)
+            except Exception:
+                pass
+            self.collection = self.client.get_or_create_collection(
+                name=COLLECTION_NAME_VI,
+                metadata={"hnsw:space": "cosine"},
+            )
             return
 
-        self._fallback_docs = {"vi": {}}
-        for language in ["vi"]:
-            path = self._fallback_path(language)
-            if path.exists():
-                path.unlink()
+        self._fallback_docs = {}
+        path = self._fallback_path()
+        if path.exists():
+            path.unlink()
 
     def search(
         self,
         query_embedding: list[float],
-        language: str,
         top_k: int = 5,
         category_filter: str | None = None,
     ) -> list[dict[str, Any]]:
         if self.use_chroma:
-            collection = self.collections[language]
-            if collection.count() == 0:
+            if self.collection.count() == 0:
                 return []
             where_filter = {"category": category_filter} if category_filter else None
             try:
-                results = collection.query(
+                results = self.collection.query(
                     query_embeddings=[query_embedding],
                     n_results=top_k,
                     where=where_filter,
@@ -104,7 +96,7 @@ class VectorStore:
             except Exception:
                 if where_filter is None:
                     raise
-                results = collection.query(
+                results = self.collection.query(
                     query_embeddings=[query_embedding],
                     n_results=top_k,
                     include=["documents", "distances", "metadatas"],
@@ -112,7 +104,7 @@ class VectorStore:
             return self._format_chroma_results(results)
 
         scored = []
-        for doc_id, doc in self._fallback_docs[language].items():
+        for doc_id, doc in self._fallback_docs.items():
             metadata = doc.get("metadata", {})
             if category_filter and metadata.get("category") != category_filter:
                 continue
@@ -131,10 +123,10 @@ class VectorStore:
     def get_stats(self) -> dict[str, int]:
         if self.use_chroma:
             return {
-                "vi_count": self.collections["vi"].count(),
+                "vi_count": self.collection.count(),
             }
         return {
-            "vi_count": len(self._fallback_docs["vi"]),
+            "vi_count": len(self._fallback_docs),
         }
 
     def _format_chroma_results(self, results: dict[str, Any]) -> list[dict[str, Any]]:
@@ -171,23 +163,22 @@ class VectorStore:
             "section": str(chunk.get("section", "")),
             "url": str(chunk.get("url", "")),
             "title": str(chunk.get("title", "")),
-            "language": str(chunk.get("language", "")),
+            "language": "vi",
             "risk_categories": risk_categories_value,
             "word_count": int(chunk.get("word_count", 0) or 0),
             "quality_score": float(chunk.get("quality_score", 0.0) or 0.0),
         }
 
-    def _fallback_path(self, language: str) -> Path:
-        return self.persist_dir / f"simple_{language}.json"
+    def _fallback_path(self) -> Path:
+        return self.persist_dir / "simple_vi.json"
 
     def _load_fallback(self) -> None:
-        for language in ["vi"]:
-            path = self._fallback_path(language)
-            if path.exists():
-                with open(path, "r", encoding="utf-8") as f:
-                    self._fallback_docs[language] = json.load(f)
+        path = self._fallback_path()
+        if path.exists():
+            with open(path, "r", encoding="utf-8") as f:
+                self._fallback_docs = json.load(f)
 
-    def _save_fallback(self, language: str) -> None:
-        path = self._fallback_path(language)
+    def _save_fallback(self) -> None:
+        path = self._fallback_path()
         with open(path, "w", encoding="utf-8") as f:
-            json.dump(self._fallback_docs[language], f, ensure_ascii=False)
+            json.dump(self._fallback_docs, f, ensure_ascii=False)

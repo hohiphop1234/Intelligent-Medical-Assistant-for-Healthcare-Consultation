@@ -13,7 +13,7 @@ from config import (
 )
 from src.bm25_store import BM25Store
 from src.data_cleaner import DataCleaner
-from src.embeddings import DualEmbeddingManager
+from src.embeddings import EmbeddingManager
 from src.evidence_grader import EvidenceGrader
 from src.hybrid_retriever import HybridRetriever
 from src.query_router import QueryRouter
@@ -43,7 +43,7 @@ class MedicalRAGPipeline:
     def __init__(self):
         self.safety_guard = SafetyGuard(CATEGORIES_PATH)
         self.query_router = QueryRouter(CATEGORIES_PATH)
-        self.embedding_manager = DualEmbeddingManager()
+        self.embedding_manager = EmbeddingManager()
         self.vector_store = VectorStore(CHROMA_PERSIST_DIR)
         self.bm25_store = BM25Store()
         self.bm25_store.load(BM25_INDEX_PATH)
@@ -56,23 +56,20 @@ class MedicalRAGPipeline:
         self.response_validator = ResponseValidator()
 
     def process_query(self, question: str) -> dict[str, Any]:
-        language = self.embedding_manager.detect_language(question)
-
         if self.safety_guard.is_emergency(question):
-            return self.safety_guard.emergency_response(question, language)
+            return self.safety_guard.emergency_response(question)
 
-        classification = self.query_router.classify(question, language)
+        classification = self.query_router.classify(question)
         if classification.category == "out_of_scope":
-            return self.safety_guard.out_of_scope_response(question, language)
+            return self.safety_guard.out_of_scope_response(question)
 
         if classification.confidence < CONFIDENCE_THRESHOLD:
-            return self.safety_guard.insufficient_evidence_response(question, language)
+            return self.safety_guard.insufficient_evidence_response(question)
 
         category_filter = self._retrieval_category_filter(question, classification)
         search_top_k = self._retrieval_top_k(question, classification)
         results = self.hybrid_retriever.search(
             question,
-            language=language,
             top_k=search_top_k,
             category_filter=category_filter,
         )
@@ -83,12 +80,12 @@ class MedicalRAGPipeline:
             if crawled:
                 for chunk in crawled:
                     chunk["embedding"] = self.embedding_manager.embed(
-                        chunk["content"], language
+                        chunk["content"]
                     )
                 graded = self.evidence_grader.grade(question, results + crawled)
 
         if not graded.relevant_chunks:
-            return self.safety_guard.insufficient_evidence_response(question, language)
+            return self.safety_guard.insufficient_evidence_response(question)
 
         response = self.response_generator.generate(
             question, graded.relevant_chunks, classification
@@ -132,14 +129,13 @@ class MedicalRAGPipeline:
         self.vector_store.reset()
 
         all_chunks: dict[str, list[dict[str, Any]]] = {}
-        for language in ["vi"]:
-            chunks_path = Path(PROCESSED_DATA_DIR) / f"chunks_{language}.jsonl"
-            chunks = load_jsonl(chunks_path)
-            all_chunks[language] = chunks
-            texts = [chunk["content"] for chunk in chunks]
-            embeddings = self.embedding_manager.embed_batch(texts, language=language)
-            self.vector_store.add_documents(chunks, embeddings, language=language)
-            self.bm25_store.build_index(chunks, language=language)
+        chunks_path = Path(PROCESSED_DATA_DIR) / "chunks_vi.jsonl"
+        chunks = load_jsonl(chunks_path)
+        all_chunks["vi"] = chunks
+        texts = [chunk["content"] for chunk in chunks]
+        embeddings = self.embedding_manager.embed_batch(texts)
+        self.vector_store.add_documents(chunks, embeddings)
+        self.bm25_store.build_index(chunks)
 
         self.bm25_store.save(BM25_INDEX_PATH)
         stats = self.vector_store.get_stats()

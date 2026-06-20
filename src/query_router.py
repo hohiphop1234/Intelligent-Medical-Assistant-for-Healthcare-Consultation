@@ -42,7 +42,6 @@ class QueryClassification:
     risk_level: str
     confidence: float
     requires_rag: bool
-    language: str
 
 
 class QueryRouter:
@@ -51,10 +50,10 @@ class QueryRouter:
     def __init__(self, categories_path: str = CATEGORIES_PATH):
         self.safety_guard = SafetyGuard(categories_path)
 
-    def classify(self, query: str, language: str) -> QueryClassification:
-        return self._classify_with_rules(query, language)
+    def classify(self, query: str) -> QueryClassification:
+        return self._classify_with_rules(query)
 
-    def _classify_with_llm(self, query: str, language: str) -> QueryClassification:
+    def _classify_with_llm(self, query: str) -> QueryClassification:
         prompt = f"""Classify this user query for a medical RAG assistant.
 Return JSON only.
 
@@ -85,9 +84,8 @@ Return:
         )
         content = response.choices[0].message.content or "{}"
         data = safe_json_loads(content) or {}
-        data["language"] = language
         data["requires_rag"] = data.get("category") != "out_of_scope"
-        classification = self._coerce_classification(data, language)
+        classification = self._coerce_classification(data)
         alias_entities = self._extract_entities(normalize_for_match(query))
         if alias_entities:
             classification.entities = sorted(set(classification.entities) | set(alias_entities))
@@ -99,7 +97,7 @@ Return:
                 classification.confidence = max(classification.confidence, 0.82)
         return classification
 
-    def _classify_with_rules(self, query: str, language: str) -> QueryClassification:
+    def _classify_with_rules(self, query: str) -> QueryClassification:
         q = normalize_for_match(query)
         entities = self._extract_entities(q)
 
@@ -184,14 +182,13 @@ Return:
             risk_level=risk if risk != "none" else "low",
             confidence=confidence,
             requires_rag=requires_rag,
-            language=language,
         )
 
     def _extract_entities(self, normalized_query: str) -> list[str]:
         return extract_drug_entities(normalized_query, KNOWN_DRUGS)
 
     def _coerce_classification(
-        self, data: dict, language: str
+        self, data: dict
     ) -> QueryClassification:
         category = str(data.get("category") or "out_of_scope")
         if category == "general_health":
@@ -203,5 +200,4 @@ Return:
             risk_level=str(data.get("risk_level") or "medium"),
             confidence=float(data.get("confidence") or 0.0),
             requires_rag=bool(data.get("requires_rag", category != "out_of_scope")),
-            language=language,
         )

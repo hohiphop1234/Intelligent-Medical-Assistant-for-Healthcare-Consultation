@@ -1,9 +1,9 @@
 # Intelligent Medical Assistant RAG
 
-Educational bilingual medical RAG prototype for healthcare consultation support.
+Educational Vietnamese medical RAG prototype for healthcare consultation support.
 
 This project builds a retrieval-augmented generation pipeline over a small
-medical dataset. It is designed to answer only from retrieved evidence, classify
+Vietnamese medical dataset. It is designed to answer only from retrieved evidence, classify
 medical query categories, detect emergencies, refuse out-of-scope questions, and
 attach source citations to generated answers.
 
@@ -14,8 +14,8 @@ attach source citations to generated answers.
 ## What This Project Does
 
 - Cleans crawled medical documents from `data/raw`.
-- Builds English and Vietnamese RAG chunks.
-- Creates dual-language embeddings.
+- Builds Vietnamese RAG chunks.
+- Creates text embeddings.
 - Stores vectors in ChromaDB.
 - Builds a BM25 keyword index.
 - Combines vector search and BM25 with Reciprocal Rank Fusion.
@@ -35,7 +35,6 @@ Raw source files are stored in:
 
 ```text
 data/raw/
-  rag_chunks.jsonl
   rag_chunks_vi.jsonl
   clean_rag_chunks_vi.jsonl
   clean_rag_chunks_vi_report.json
@@ -55,7 +54,6 @@ These generated directories are ignored by git.
 The current processed dataset size after cleaning is approximately:
 
 ```text
-English chunks:    189
 Vietnamese chunks: 216
 ```
 
@@ -80,7 +78,7 @@ Vietnamese collection instead of the noisier raw `rag_chunks_vi.jsonl`.
 ├── src/
 │   ├── bm25_store.py              # Keyword retrieval
 │   ├── data_cleaner.py            # Cleaning and metadata enrichment
-│   ├── embeddings.py              # Dual embedding manager
+│   ├── embeddings.py              # Embedding manager
 │   ├── evidence_grader.py         # Evidence quality grading
 │   ├── hybrid_retriever.py        # Vector + BM25 fusion
 │   ├── query_router.py            # Medical query classification
@@ -101,8 +99,7 @@ Vietnamese collection instead of the noisier raw `rag_chunks_vi.jsonl`.
 
 ```mermaid
 flowchart TD
-    A["User question"] --> B["Language detection"]
-    B --> C["Emergency detection"]
+    A["User question"] --> C["Emergency detection"]
     C -->|Emergency| D["Emergency response only"]
     C -->|Not emergency| E["Query router"]
     E -->|Out of scope| F["Refusal response"]
@@ -179,7 +176,6 @@ This uses:
 
 ```text
 VI: Dqdung205/medical_vietnamese_embedding
-EN: BAAI/bge-m3
 ```
 
 The first run may download several GB of model weights.
@@ -206,7 +202,7 @@ Expected output:
 
 ```text
 Ingesting data...
-Done: {'vi_count': 216, 'en_count': 189, 'bm25_vi_count': 216, 'bm25_en_count': 189}
+Done: {'vi_count': 216, 'bm25_vi_count': 216}
 ```
 
 The ingest step:
@@ -226,19 +222,13 @@ real embedding models.
 Ask one question:
 
 ```powershell
-python main.py --query "What are the side effects of Warfarin?"
-```
-
-Vietnamese example:
-
-```powershell
 python main.py --query "tác dụng phụ của warfarin"
 ```
 
 Show raw JSON:
 
 ```powershell
-python main.py --query "Can I take ibuprofen with warfarin?" --json
+python main.py --query "Tôi có thể uống ibuprofen cùng với warfarin không?" --json
 ```
 
 Interactive mode:
@@ -270,23 +260,19 @@ In-scope RAG:
 
 ```text
 tác dụng phụ của warfarin
-What are the side effects of Metformin?
-Can I take ibuprofen with warfarin?
 Warfarin có tương tác với Ibuprofen không?
 ```
 
 Out-of-scope:
 
 ```text
-How to cook spaghetti?
 Thời tiết hôm nay thế nào?
-Help me code Python
+Giúp mình code Python
 ```
 
 Emergency:
 
 ```text
-I have severe chest pain and difficulty breathing
 Tôi uống quá liều paracetamol phải làm sao?
 Tôi muốn tự tử
 ```
@@ -526,8 +512,7 @@ Options:
 
 Try this order:
 
-1. Check whether the query is routed to the correct language.
-2. Run the CLI with `--json` to inspect category, sources, and confidence.
+1. Run the CLI with `--json` to inspect category, sources, and confidence.
 3. Inspect retrieved sources.
 4. Improve `data_cleaner.py` noise removal.
 5. Add more category keywords in `data/categories.json`.
@@ -598,7 +583,7 @@ python main.py --ingest
 python main.py --query "tác dụng phụ của warfarin"
 
 # Ask one question and show JSON
-python main.py --query "Can I take ibuprofen with warfarin?" --json
+python main.py --query "Tôi có thể uống ibuprofen cùng với warfarin không?" --json
 
 # Run evaluation
 python evaluation/evaluate.py

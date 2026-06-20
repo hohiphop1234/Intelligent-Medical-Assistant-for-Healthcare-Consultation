@@ -17,43 +17,42 @@ class BM25Store:
     """Keyword index used beside vector search."""
 
     def __init__(self):
-        self.indices: dict[str, Any] = {"vi": None}
-        self.documents: dict[str, list[str]] = {"vi": []}
-        self.doc_ids: dict[str, list[str]] = {"vi": []}
-        self.metadatas: dict[str, list[dict[str, Any]]] = {"vi": []}
-        self.tokenized: dict[str, list[list[str]]] = {"vi": []}
-        self._idf: dict[str, dict[str, float]] = {"vi": {}}
+        self.index: Any = None
+        self.documents: list[str] = []
+        self.doc_ids: list[str] = []
+        self.metadatas: list[dict[str, Any]] = []
+        self.tokenized: list[list[str]] = []
+        self._idf: dict[str, float] = {}
 
-    def build_index(self, chunks: list[dict[str, Any]], language: str) -> None:
-        docs = [self._tokenize(chunk["content"], language) for chunk in chunks]
-        self.tokenized[language] = docs
-        self.documents[language] = [chunk["content"] for chunk in chunks]
-        self.doc_ids[language] = [str(chunk["id"]) for chunk in chunks]
-        self.metadatas[language] = [self._metadata(chunk) for chunk in chunks]
+    def build_index(self, chunks: list[dict[str, Any]]) -> None:
+        docs = [self._tokenize(chunk["content"]) for chunk in chunks]
+        self.tokenized = docs
+        self.documents = [chunk["content"] for chunk in chunks]
+        self.doc_ids = [str(chunk["id"]) for chunk in chunks]
+        self.metadatas = [self._metadata(chunk) for chunk in chunks]
         if BM25Okapi is not None:
-            self.indices[language] = BM25Okapi(docs)
+            self.index = BM25Okapi(docs)
         else:
-            self.indices[language] = "simple"
-            self._idf[language] = self._build_simple_idf(docs)
+            self.index = "simple"
+            self._idf = self._build_simple_idf(docs)
 
     def search(
         self,
         query: str,
-        language: str,
         top_k: int = 5,
         category_filter: str | None = None,
     ) -> list[dict[str, Any]]:
-        if self.indices[language] is None:
+        if self.index is None:
             return []
-        query_tokens = self._tokenize(query, language)
+        query_tokens = self._tokenize(query)
         if not query_tokens:
             return []
 
-        if BM25Okapi is not None and self.indices[language] != "simple":
-            raw_scores = self.indices[language].get_scores(query_tokens)
+        if BM25Okapi is not None and self.index != "simple":
+            raw_scores = self.index.get_scores(query_tokens)
             scores = [float(score) for score in raw_scores]
         else:
-            scores = self._simple_scores(query_tokens, language)
+            scores = self._simple_scores(query_tokens)
 
         ranked_indices = sorted(
             range(len(scores)), key=lambda index: scores[index], reverse=True
@@ -64,14 +63,14 @@ class BM25Store:
                 break
             if scores[index] <= 0:
                 continue
-            metadata = self.metadatas[language][index]
+            metadata = self.metadatas[index]
             if category_filter and metadata.get("category") != category_filter:
                 continue
             results.append(
                 {
-                    "id": self.doc_ids[language][index],
-                    "doc_id": self.doc_ids[language][index],
-                    "content": self.documents[language][index],
+                    "id": self.doc_ids[index],
+                    "doc_id": self.doc_ids[index],
+                    "content": self.documents[index],
                     "score": float(scores[index]),
                     "metadata": metadata,
                 }
@@ -83,7 +82,7 @@ class BM25Store:
         with open(path, "wb") as f:
             pickle.dump(
                 {
-                    "indices": self.indices,
+                    "index": self.index,
                     "documents": self.documents,
                     "doc_ids": self.doc_ids,
                     "metadatas": self.metadatas,
@@ -98,15 +97,15 @@ class BM25Store:
             return False
         with open(path, "rb") as f:
             data = pickle.load(f)
-        self.indices = data["indices"]
-        self.documents = data["documents"]
-        self.doc_ids = data["doc_ids"]
-        self.metadatas = data.get("metadatas", {"vi": []})
-        self.tokenized = data.get("tokenized", {"vi": []})
-        self._idf = data.get("idf", {"vi": {}})
+        self.index = data.get("index")
+        self.documents = data.get("documents", [])
+        self.doc_ids = data.get("doc_ids", [])
+        self.metadatas = data.get("metadatas", [])
+        self.tokenized = data.get("tokenized", [])
+        self._idf = data.get("idf", {})
         return True
 
-    def _tokenize(self, text: str, language: str) -> list[str]:
+    def _tokenize(self, text: str) -> list[str]:
         return tokenize(text)
 
     def _metadata(self, chunk: dict[str, Any]) -> dict[str, Any]:
@@ -119,7 +118,7 @@ class BM25Store:
             "section": chunk.get("section", ""),
             "url": chunk.get("url", ""),
             "title": chunk.get("title", ""),
-            "language": chunk.get("language", ""),
+            "language": "vi",
         }
 
     def _build_simple_idf(self, docs: list[list[str]]) -> dict[str, float]:
@@ -133,10 +132,10 @@ class BM25Store:
             for token, freq in doc_freq.items()
         }
 
-    def _simple_scores(self, query_tokens: list[str], language: str) -> list[float]:
-        idf = self._idf[language]
+    def _simple_scores(self, query_tokens: list[str]) -> list[float]:
+        idf = self._idf
         scores = []
-        for doc in self.tokenized[language]:
+        for doc in self.tokenized:
             doc_length = max(len(doc), 1)
             term_counts: dict[str, int] = {}
             for token in doc:

@@ -19,20 +19,20 @@ def get_pipeline() -> LangGraphPipeline:
 async def set_starters():
     return [
         cl.Starter(
-            label="Warfarin side effects",
-            message="What are the side effects of Warfarin?",
+            label="Tác dụng phụ của Warfarin",
+            message="Tác dụng phụ của Warfarin là gì?",
         ),
         cl.Starter(
-            label="Drug interaction",
-            message="Can I take ibuprofen with warfarin?",
+            label="Tương tác thuốc",
+            message="Tôi có thể uống ibuprofen cùng với warfarin không?",
         ),
         cl.Starter(
-            label="Diabetes symptoms",
-            message="What are symptoms of type 2 diabetes?",
+            label="Triệu chứng tiểu đường",
+            message="Triệu chứng của bệnh tiểu đường tuýp 2 là gì?",
         ),
         cl.Starter(
-            label="Pregnancy and medicine",
-            message="Can pregnant women take Acetaminophen?",
+            label="Thai kỳ và thuốc",
+            message="Phụ nữ mang thai có thể uống Acetaminophen không?",
         ),
     ]
 
@@ -42,10 +42,10 @@ async def on_chat_start():
     stats = get_pipeline().rag_pipeline.vector_store.get_stats()
     await cl.Message(
         content=(
-            "Medical Assistant ready.\n\n"
-            f"Dataset: {stats['vi_count']} Medical Cases\n"
-            "Search: Hybrid vector + BM25\n"
-            "Safety: emergency, scope, evidence, citations"
+            "Trợ lý Y tế đã sẵn sàng.\n\n"
+            f"Dữ liệu: {stats['vi_count']} tài liệu y khoa\n"
+            "Tìm kiếm: Kết hợp Vector + BM25\n"
+            "An toàn: phát hiện khẩn cấp, phạm vi, trích dẫn"
         )
     ).send()
 
@@ -62,12 +62,12 @@ async def on_message(message: cl.Message):
     for source in result.get("sources", []):
         elements.append(
             cl.Text(
-                name=f"[{source['index']}] {source.get('title') or 'Source'}",
+                name=f"[{source['index']}] {source.get('title') or 'Nguồn'}",
                 content=(
-                    f"Source: {source.get('source', '')}\n"
+                    f"Nguồn: {source.get('source', '')}\n"
                     f"URL: {source.get('url', '')}\n"
-                    f"Section: {source.get('section', '')}\n"
-                    f"Score: {source.get('score', 0):.4f}"
+                    f"Mục: {source.get('section', '')}\n"
+                    f"Điểm: {source.get('score', 0):.4f}"
                 ),
                 display="side",
             )
@@ -79,8 +79,8 @@ async def on_message(message: cl.Message):
     category = result.get("category", "unknown")
     route_label = "🔍 RAG Pipeline" if route != "general_qa" else "🤖 Local LLM"
     content = (
-        f"📋 Category: {category} | Risk: {risk} | Confidence: {confidence}\n"
-        f"🔀 Route: {route_label}\n\n"
+        f"📋 Danh mục: {category} | Rủi ro: {risk} | Độ tự tin: {confidence}\n"
+        f"🔀 Luồng: {route_label}\n\n"
         f"{result.get('answer', '')}\n\n"
         f"---\n{result.get('disclaimer', '')}"
     )

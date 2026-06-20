@@ -128,7 +128,7 @@ class DataCleaner:
         for source_file in vi_files:
             rows = self._load_jsonl(source_file)
             for row in rows:
-                cleaned = self.clean_chunk(row, "vi")
+                cleaned = self.clean_chunk(row)
                 if cleaned is not None:
                     all_cleaned_rows.append(cleaned)
                     
@@ -136,10 +136,9 @@ class DataCleaner:
         counts["vi"] = len(all_cleaned_rows)
         return counts
 
-    def clean_chunk(self, row: dict[str, Any], language: str) -> dict[str, Any] | None:
+    def clean_chunk(self, row: dict[str, Any]) -> dict[str, Any] | None:
         content = str(row.get("content", ""))
-        if language == "vi":
-            content = self.fix_vietnamese_encoding(content)
+        content = self.fix_vietnamese_encoding(content)
         content = self.remove_noise(content)
         content = self.normalize_whitespace(content)
 
@@ -147,9 +146,9 @@ class DataCleaner:
         risk_level = self._infer_risk(row, category)
         cleaned = {
             **row,
-            "id": row.get("id") or self._make_id(row, language),
+            "id": row.get("id") or self._make_id(row),
             "content": content,
-            "language": language,
+            "language": "vi",
             "word_count": len(content.split()),
             "quality_score": self.quality_score(content),
             "category": category,
@@ -187,17 +186,17 @@ class DataCleaner:
             return "critical"
         return CATEGORY_RISK_MAP.get(category, "medium")
 
-    def _make_id(self, row: dict[str, Any], language: str) -> str:
+    def _make_id(self, row: dict[str, Any]) -> str:
         seed = "|".join(
             [
-                language,
+                "vi",
                 str(row.get("source", "")),
                 str(row.get("url", "")),
                 str(row.get("title", "")),
                 str(row.get("content", ""))[:120],
             ]
         )
-        return f"{language}-{stable_hash(seed, 20)}"
+        return f"vi-{stable_hash(seed, 20)}"
 
     def _resolve_raw_dir(self, raw_dir: str) -> Path:
         candidates = self._candidate_dirs(raw_dir)

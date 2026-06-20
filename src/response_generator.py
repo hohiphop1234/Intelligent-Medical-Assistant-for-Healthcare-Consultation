@@ -35,7 +35,7 @@ SYSTEM_PROMPT = """You are a trusted medical information assistant that synthesi
 2. Cite every factual claim with [1], [2], [3] matching the source index.
 3. NEVER diagnose, prescribe, or recommend specific dosages.
 4. Always recommend consulting a healthcare professional at the end.
-5. Use the SAME LANGUAGE as the user's question.
+5. Always answer in Vietnamese.
 
 ## Answer Structure
 - Start with a **direct, concise answer** to the user's question (1-2 sentences).
@@ -81,7 +81,6 @@ class ResponseGenerator:
             "risk_level": classification.risk_level,
             "category": classification.category,
             "classification_confidence": classification.confidence,
-            "language": classification.language,
         }
 
     def _generate_with_llm(self, question: str, chunks: list[dict[str, Any]]) -> str:
@@ -124,32 +123,23 @@ class ResponseGenerator:
         chunks: list[dict[str, Any]],
         classification: QueryClassification,
     ) -> tuple[str, list[dict[str, Any]]]:
-        language = classification.language
-        if language == "vi":
-            intro = "Dựa trên các nguồn được truy xuất:"
-            closing = (
-                "Vui lòng trao đổi với bác sĩ hoặc dược sĩ trước khi áp dụng, "
-                "đặc biệt nếu có bệnh nền, đang mang thai, là trẻ em/người cao tuổi, "
-                "hoặc đang dùng thuốc khác."
-            )
-        else:
-            intro = "Based on the retrieved sources:"
-            closing = (
-                "Please consult a doctor or pharmacist before acting on this, "
-                "especially for pregnancy, children, older adults, medical conditions, "
-                "or medication changes."
-            )
+        intro = "Dựa trên các nguồn được truy xuất:"
+        closing = (
+            "Vui lòng trao đổi với bác sĩ hoặc dược sĩ trước khi áp dụng, "
+            "đặc biệt nếu có bệnh nền, đang mang thai, là trẻ em/người cao tuổi, "
+            "hoặc đang dùng thuốc khác."
+        )
 
         if classification.category == "drug_interaction":
             interaction_answer = self._generate_interaction_answer(
-                question, chunks, language, classification.entities, intro, closing
+                question, chunks, classification.entities, intro, closing
             )
             if interaction_answer is not None:
                 return interaction_answer
 
         if self._is_side_effect_question(question):
             side_effect_answer = self._generate_side_effect_answer(
-                chunks, language, intro, closing
+                chunks, intro, closing
             )
             if side_effect_answer is not None:
                 return side_effect_answer
@@ -169,11 +159,7 @@ class ResponseGenerator:
                 evidence.append((chunk, sentence))
         if not evidence:
             return (
-                (
-                    "Không đủ thông tin trong các nguồn được truy xuất để trả lời chính xác."
-                    if language == "vi"
-                    else "There is not enough information to answer accurately."
-                ),
+                "Không đủ thông tin trong các nguồn được truy xuất để trả lời chính xác.",
                 chunks[:1],
             )
         bullets = [
@@ -187,7 +173,6 @@ class ResponseGenerator:
         self,
         question: str,
         chunks: list[dict[str, Any]],
-        language: str,
         entities: list[str],
         intro: str,
         closing: str,
@@ -364,7 +349,6 @@ class ResponseGenerator:
     def _generate_side_effect_answer(
         self,
         chunks: list[dict[str, Any]],
-        language: str,
         intro: str,
         closing: str,
     ) -> tuple[str, list[dict[str, Any]]] | None:
@@ -376,9 +360,7 @@ class ResponseGenerator:
                 continue
             warning = self._find_sentence_with_terms(
                 content,
-                ["hoại tử", "gangrene", "màu tím", "tối màu"]
-                if language == "vi"
-                else ["necrosis", "gangrene", "purple", "dark"],
+                ["hoại tử", "gangrene", "màu tím", "tối màu"],
             )
             if best_candidate is None or len(items) > len(best_candidate[1]):
                 best_candidate = (chunk, items, warning)
@@ -405,27 +387,17 @@ class ResponseGenerator:
             if not warning:
                 warning = self._find_sentence_with_terms(
                     other_chunk.get("content", ""),
-                    ["hoại tử", "gangrene", "màu tím", "tối màu"]
-                    if language == "vi"
-                    else ["necrosis", "gangrene", "purple", "dark"],
+                    ["hoại tử", "gangrene", "màu tím", "tối màu"],
                 )
         items = self._dedupe_keep_order(merged_items)
 
         symptom_line = "; ".join(items[:10])
-        if language == "vi":
-            bullets = [
-                (
-                    "- Các dấu hiệu/tác dụng phụ cần gọi bác sĩ ngay gồm: "
-                    f"{symptom_line}. [1]"
-                )
-            ]
-        else:
-            bullets = [
-                (
-                    "- Signs/side effects that require calling a doctor include: "
-                    f"{symptom_line}. [1]"
-                )
-            ]
+        bullets = [
+            (
+                "- Các dấu hiệu/tác dụng phụ cần gọi bác sĩ ngay gồm: "
+                f"{symptom_line}. [1]"
+            )
+        ]
         if warning:
             bullets.append(f"- {warning}. [1]")
 
@@ -489,12 +461,6 @@ class ResponseGenerator:
         normalized_content = normalize_for_match(content)
         lowered_terms = [term.lower() for term in terms]
         if "hoai tu" in normalized_content or "gangrene" in normalized_content:
-            if any(term in lowered_terms for term in ["necrosis", "purple", "dark"]):
-                return (
-                    "Warfarin may cause necrosis or gangrene; call a doctor right away "
-                    "if skin turns dark or purple, ulcers appear, severe pain occurs, "
-                    "or body color/temperature changes"
-                )
             return (
                 "Warfarin có thể gây hoại tử hoặc hoại thư; hãy gọi bác sĩ ngay "
                 "nếu thấy da đổi màu/tím, loét, đau dữ dội hoặc thay đổi màu/nhiệt độ trên cơ thể"
