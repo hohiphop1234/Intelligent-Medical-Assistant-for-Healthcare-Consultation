@@ -7,26 +7,6 @@ from src.utils import load_json, normalize_for_match
 
 
 EMERGENCY_PATTERNS = {
-    "en": [
-        r"\bchest pain\b",
-        r"\bsevere chest pain\b",
-        r"\bcan t breathe\b",
-        r"\bdifficulty breathing\b",
-        r"\bstroke\b",
-        r"\bheart attack\b",
-        r"\boverdose\b",
-        r"\btook too many\b",
-        r"\bsuicid",
-        r"\bwant to die\b",
-        r"\bself harm\b",
-        r"\bsevere bleeding\b",
-        r"\bunconscious\b",
-        r"\bseizure\b",
-        r"\ballergic reaction\b.*\bswelling\b",
-        r"\banaphyla",
-        r"\bpoisoning\b",
-        r"\bnot responsive\b",
-    ],
     "vi": [
         r"\bdau nguc\b",
         r"\bkho tho\b",
@@ -58,14 +38,6 @@ EMERGENCY_RESPONSES = {
         "Toi khong the thay the bac si trong tinh huong khan cap. "
         "Vui long tim tro giup y te truc tiep ngay."
     ),
-    "en": (
-        "**EMERGENCY WARNING**\n\n"
-        "The symptoms you describe may indicate a medical emergency.\n\n"
-        "Call emergency services (911) or go to the nearest hospital immediately. "
-        "In Vietnam, call 115.\n\n"
-        "I cannot replace a doctor in emergency situations. "
-        "Please seek immediate medical attention."
-    ),
 }
 
 OUT_OF_SCOPE_RESPONSES = {
@@ -73,11 +45,6 @@ OUT_OF_SCOPE_RESPONSES = {
         "Cau hoi nay nam ngoai pham vi kien thuc y te cua tro ly.\n\n"
         "Toi co the ho tro ve thuoc, tac dung phu, tuong tac thuoc, "
         "thong tin benh ly, thai ky, nhi khoa va nguoi cao tuoi."
-    ),
-    "en": (
-        "This question is outside the assistant's medical knowledge scope.\n\n"
-        "I can help with drug information, side effects, drug interactions, "
-        "disease information, pregnancy, pediatric care, and elderly care."
     ),
 }
 
@@ -87,25 +54,16 @@ INSUFFICIENT_EVIDENCE_RESPONSES = {
         "một cách an toàn.\n\n"
         "Vui lòng tham khảo bác sĩ, dược sĩ, hoặc nguồn y tế chính thống."
     ),
-    "en": (
-        "I could not find enough reliable evidence to answer this question safely.\n\n"
-        "Please consult a doctor, pharmacist, or a trusted medical source."
-    ),
 }
 
 DISCLAIMERS = {
     "low": {
         "vi": "Thông tin chỉ mang tính tham khảo. Hãy hỏi bác sĩ nếu cần.",
-        "en": "For informational purposes only. Consult a doctor if needed.",
     },
     "medium": {
         "vi": (
             "Thông tin chỉ mang tính tham khảo và không thay thế tư vấn y tế "
             "chuyên nghiệp. Vui lòng tham khảo ý kiến bác sĩ."
-        ),
-        "en": (
-            "This information is for reference only and does not replace "
-            "professional medical advice. Please consult a doctor."
         ),
     },
     "high": {
@@ -113,26 +71,18 @@ DISCLAIMERS = {
             "QUAN TRỌNG: Không tự ý thay đổi liều thuốc hoặc phác đồ điều trị. "
             "Hãy hỏi bác sĩ hoặc dược sĩ trước khi hành động."
         ),
-        "en": (
-            "IMPORTANT: Do not change dosage or treatment on your own. "
-            "Consult your doctor or pharmacist before making changes."
-        ),
     },
     "critical": {
         "vi": (
             "CẢNH BÁO: Đây là nhóm thông tin nhạy cảm. Bắt buộc tham khảo "
             "bác sĩ chuyên khoa trước khi áp dụng."
         ),
-        "en": (
-            "WARNING: This involves sensitive medical information. You should "
-            "consult a qualified clinician before acting on it."
-        ),
     },
 }
 
 
 def get_disclaimer(risk_level: str, language: str) -> str:
-    language = "vi" if language == "vi" else "en"
+    language = "vi"
     return DISCLAIMERS.get(risk_level, DISCLAIMERS["medium"])[language]
 
 
@@ -155,7 +105,7 @@ class SafetyGuard:
         return False
 
     def emergency_response(self, query: str, language: str) -> dict[str, Any]:
-        language = "vi" if language == "vi" else "en"
+        language = "vi"
         return {
             "type": "emergency",
             "message": EMERGENCY_RESPONSES[language],
@@ -192,7 +142,7 @@ class SafetyGuard:
         return best[1]
 
     def out_of_scope_response(self, query: str, language: str) -> dict[str, Any]:
-        language = "vi" if language == "vi" else "en"
+        language = "vi"
         return {
             "type": "out_of_scope",
             "message": OUT_OF_SCOPE_RESPONSES[language],
@@ -201,7 +151,7 @@ class SafetyGuard:
         }
 
     def insufficient_evidence_response(self, query: str, language: str) -> dict[str, Any]:
-        language = "vi" if language == "vi" else "en"
+        language = "vi"
         return {
             "type": "insufficient_evidence",
             "message": INSUFFICIENT_EVIDENCE_RESPONSES[language],

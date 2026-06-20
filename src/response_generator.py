@@ -25,16 +25,30 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     OpenAI = None
 
+from src.qwen_llm import QwenMedicalLLM
 
-SYSTEM_PROMPT = """You are a medical information assistant.
-Follow these rules strictly:
-1. Answer only from the provided context documents.
-2. Cite sources with [1], [2], [3] after factual claims.
-3. If evidence is insufficient, say that evidence is insufficient.
-4. Never diagnose, prescribe, or recommend personal dosages.
-5. Recommend consulting a healthcare professional.
-6. Use the same language as the user question.
-7. For pregnancy questions, do not use breastfeeding, lactation, milk, or postpartum evidence unless the user asks about breastfeeding.
+
+SYSTEM_PROMPT = """You are a trusted medical information assistant that synthesizes evidence from verified sources.
+
+## Core Rules
+1. Answer ONLY from the provided context documents. Never invent information.
+2. Cite every factual claim with [1], [2], [3] matching the source index.
+3. NEVER diagnose, prescribe, or recommend specific dosages.
+4. Always recommend consulting a healthcare professional at the end.
+5. Use the SAME LANGUAGE as the user's question.
+
+## Answer Structure
+- Start with a **direct, concise answer** to the user's question (1-2 sentences).
+- Then provide **supporting details** organized logically (use bullet points or numbered lists when listing multiple items).
+- If the question asks "which" or "what" (e.g., "thuốc nào", "which drugs"), list specific names/items found in the sources.
+- If context documents don't contain a direct answer, explicitly state: "Thông tin trong nguồn dữ liệu không đủ để trả lời trực tiếp câu hỏi này".
+
+## Quality Guidelines
+- **Synthesize**, don't copy-paste. Rewrite raw source text into natural, readable sentences.
+- Remove navigation text, breadcrumbs, or formatting artifacts from source content before using it.
+- Merge related information from multiple sources into coherent paragraphs.
+- For drug safety questions: mention specific drug names, age restrictions, and contraindications if available.
+- For pregnancy questions: do NOT use breastfeeding/lactation/postpartum evidence unless the user explicitly asks about breastfeeding.
 """
 
 
@@ -42,16 +56,7 @@ class ResponseGenerator:
     """Generate cited answers from graded context."""
 
     def __init__(self):
-        self.client = None
-        if (
-            OpenAI is not None
-            and OPENROUTER_API_KEY
-            and OPENROUTER_API_KEY != "your_key_here"
-        ):
-            self.client = OpenAI(
-                api_key=OPENROUTER_API_KEY,
-                base_url=OPENROUTER_BASE_URL,
-            )
+        self.local_llm = QwenMedicalLLM()
 
     def generate(
         self,
@@ -60,14 +65,12 @@ class ResponseGenerator:
         classification: QueryClassification,
     ) -> dict[str, Any]:
         used_chunks = chunks
-        if self.client is not None:
-            try:
-                answer = self._generate_with_llm(question, chunks)
-            except Exception:
-                answer, used_chunks = self._generate_extractive(
-                    question, chunks, classification
-                )
-        else:
+        try:
+            answer = self._generate_with_llm(question, chunks)
+            if answer.startswith("Lỗi:"):
+                raise Exception(answer)
+        except Exception as e:
+            print(f"\\n[RAG Pipeline] Local LLM Failed: {e}\\n")
             answer, used_chunks = self._generate_extractive(
                 question, chunks, classification
             )
@@ -90,16 +93,12 @@ class ResponseGenerator:
             "Ignore citation numbers that appear inside a context document; only use "
             "the source numbers assigned to the context documents."
         )
-        response = self.client.chat.completions.create(
-            model=LLM_MODEL,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=LLM_TEMPERATURE,
-            max_tokens=LLM_MAX_TOKENS,
+        
+        return self.local_llm.generate_answer(
+            question=prompt,
+            max_new_tokens=800,
+            system_prompt=SYSTEM_PROMPT
         )
-        return response.choices[0].message.content or ""
 
     def _build_context(self, chunks: list[dict[str, Any]]) -> str:
         parts = []
@@ -108,8 +107,14 @@ class ResponseGenerator:
             source = metadata.get("source") or chunk.get("source", "Unknown")
             title = metadata.get("title") or chunk.get("title", "")
             section = metadata.get("section") or chunk.get("section", "")
+            content = chunk['content']
+            # Clean navigation/breadcrumb noise trước khi gửi vào LLM
+            content = re.sub(r"Sức khỏe\s+Quay lại.*?(?=#|\n|$)", "", content)
+            content = re.sub(r"Quay lại\s+\w+\s+Quay lại", "", content)
+            content = re.sub(r"^\s*#\s*$", "", content, flags=re.MULTILINE)
+            content = re.sub(r"\n{3,}", "\n\n", content).strip()
             parts.append(
-                f"[{index}] Source: {source} | {title} | {section}\n{chunk['content']}"
+                f"[{index}] Source: {source} | {title} | {section}\n{content}"
             )
         return "\n\n---\n\n".join(parts)
 
@@ -639,6 +644,10 @@ class ResponseGenerator:
     def _clean_extractive_sentence(self, sentence: str) -> str:
         sentence = re.sub(r"\[\d+(?:[-,]\d+)*\]", "", sentence)
         sentence = re.sub(r"\[(?:PMC|PubMed|CrossRef)[^\]]*\]", "", sentence, flags=re.IGNORECASE)
+        # Loại bỏ breadcrumb/navigation artifacts tiếng Việt
+        sentence = re.sub(r"Sức khỏe\s+Quay lại.*?(?=#|\n|$)", "", sentence)
+        sentence = re.sub(r"Quay lại\s+\w+\s+Quay lại", "", sentence)
+        sentence = re.sub(r"^\s*#\s*", "", sentence)
         sentence = re.sub(r"\s+", " ", sentence)
         return sentence.strip(" .;:-")
 

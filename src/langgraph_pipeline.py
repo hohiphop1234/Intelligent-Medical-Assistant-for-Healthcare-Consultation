@@ -136,7 +136,7 @@ class LangGraphPipeline:
                 "category": classification.category,
                 "risk_level": classification.risk_level,
                 "route": "end_now",
-                "answer": out_resp["answer"]
+                "answer": out_resp["message"]
             }
             
         if classification.confidence < CONFIDENCE_THRESHOLD:
@@ -146,7 +146,7 @@ class LangGraphPipeline:
                 "category": classification.category,
                 "risk_level": classification.risk_level,
                 "route": "end_now",
-                "answer": insuf_resp["answer"]
+                "answer": insuf_resp["message"]
             }
             
         # Quyết định route: Các danh mục liên quan tới bệnh án, rủi ro cao -> RAG. Cơ bản -> LLM QA.
@@ -263,6 +263,7 @@ class LangGraphPipeline:
             "sources": final_state.get("sources", []),
             "risk_level": final_state.get("risk_level", "low"),
             "category": final_state.get("category", "unknown"),
+            "route": final_state.get("route", "rag"),
             "classification_confidence": final_state.get("confidence", 0.0),
             "language": final_state.get("language", "vi"),
             "confidence": final_state.get("evidence_score", 0.0),

@@ -30,18 +30,8 @@ class GradingResult:
 class EvidenceGrader:
     """Grade whether retrieved chunks are useful enough to answer."""
 
-    def __init__(self, use_llm: bool = True):
-        self.client = None
-        if (
-            use_llm
-            and OpenAI is not None
-            and OPENROUTER_API_KEY
-            and OPENROUTER_API_KEY != "your_key_here"
-        ):
-            self.client = OpenAI(
-                api_key=OPENROUTER_API_KEY,
-                base_url=OPENROUTER_BASE_URL,
-            )
+    def __init__(self, use_llm: bool = False):
+        pass
 
     def grade(self, question: str, chunks: list[dict[str, Any]]) -> GradingResult:
         relevant = []
@@ -63,7 +53,10 @@ class EvidenceGrader:
         average = sum(item.get("relevance_score", 0.0) for item in relevant) / max(
             len(relevant), 1
         )
-        needs_crawl = len(relevant) < MIN_EVIDENCE_CHUNKS
+        # Nếu có ít nhất 1 chunk chất lượng cao (score >= 0.7), không cần crawl thêm
+        needs_crawl = len(relevant) < MIN_EVIDENCE_CHUNKS and not any(
+            c.get("relevance_score", 0) >= 0.7 for c in relevant
+        )
         confidence = "high" if average >= 0.75 else "medium" if average >= 0.45 else "low"
         return GradingResult(
             relevant_chunks=relevant,
@@ -80,13 +73,6 @@ class EvidenceGrader:
         ):
             return 0.0
         rule_score = self._grade_single_rules(question, chunk)
-        if self.client is not None:
-            try:
-                if self._grade_single_llm(question, chunk["content"]):
-                    return max(rule_score, 0.8)
-                return min(rule_score, 0.2)
-            except Exception:
-                pass
         return rule_score
 
     def _grade_single_llm(self, question: str, chunk_content: str) -> bool:

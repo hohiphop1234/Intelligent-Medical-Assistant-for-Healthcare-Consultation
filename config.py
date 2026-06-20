@@ -14,7 +14,7 @@ BASE_DIR = Path(__file__).resolve().parent
 # LLM via OpenRouter
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-LLM_MODEL = os.getenv("LLM_MODEL", "qwen/qwen3.6-plus")
+LLM_MODEL = os.getenv("LLM_MODEL", "qwen/qwen-plus")
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.3"))
 LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "2048"))
 
@@ -35,7 +35,7 @@ CHROMA_PERSIST_DIR = str(BASE_DIR / "models" / "chromadb")
 COLLECTION_NAME_VI = "medical_rag_vi"
 
 # Retrieval
-TOP_K = int(os.getenv("TOP_K", "5"))
+TOP_K = int(os.getenv("TOP_K", "8"))
 VECTOR_WEIGHT = float(os.getenv("VECTOR_WEIGHT", "0.6"))
 BM25_WEIGHT = float(os.getenv("BM25_WEIGHT", "0.4"))
 EVIDENCE_THRESHOLD = float(os.getenv("EVIDENCE_THRESHOLD", "0.5"))

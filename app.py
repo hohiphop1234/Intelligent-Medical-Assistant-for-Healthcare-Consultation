@@ -75,8 +75,12 @@ async def on_message(message: cl.Message):
 
     risk = result.get("risk_level", "medium")
     confidence = result.get("confidence", "unknown")
+    route = result.get("route", "rag")
+    category = result.get("category", "unknown")
+    route_label = "🔍 RAG Pipeline" if route != "general_qa" else "🤖 Local LLM"
     content = (
-        f"Risk: {risk} | Evidence confidence: {confidence}\n\n"
+        f"📋 Category: {category} | Risk: {risk} | Confidence: {confidence}\n"
+        f"🔀 Route: {route_label}\n\n"
         f"{result.get('answer', '')}\n\n"
         f"---\n{result.get('disclaimer', '')}"
     )

@@ -50,23 +50,8 @@ class QueryRouter:
 
     def __init__(self, categories_path: str = CATEGORIES_PATH):
         self.safety_guard = SafetyGuard(categories_path)
-        self.client = None
-        if (
-            OpenAI is not None
-            and OPENROUTER_API_KEY
-            and OPENROUTER_API_KEY != "your_key_here"
-        ):
-            self.client = OpenAI(
-                api_key=OPENROUTER_API_KEY,
-                base_url=OPENROUTER_BASE_URL,
-            )
 
     def classify(self, query: str, language: str) -> QueryClassification:
-        if self.client is not None:
-            try:
-                return self._classify_with_llm(query, language)
-            except Exception:
-                pass
         return self._classify_with_rules(query, language)
 
     def _classify_with_llm(self, query: str, language: str) -> QueryClassification:

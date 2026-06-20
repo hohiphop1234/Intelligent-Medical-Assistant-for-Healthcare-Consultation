@@ -66,7 +66,7 @@ class QwenMedicalLLM:
         self._is_loaded = True
         print("[+] Hoàn tất tải Qwen Medical LLM!")
 
-    def generate_answer(self, question: str, max_new_tokens: int = 512) -> str:
+    def generate_answer(self, question: str, max_new_tokens: int = 512, system_prompt: str = None) -> str:
         """
         Sinh câu trả lời dựa trên câu hỏi đầu vào.
         """
@@ -76,9 +76,12 @@ class QwenMedicalLLM:
         if self.model is None or self.tokenizer is None:
             return "Lỗi: Không thể tải mô hình LLM cục bộ (thiếu thư viện hoặc cấu hình)."
 
+        if system_prompt is None:
+            system_prompt = "You are a medical question answering assistant. Answer clearly, cautiously, and remind users to consult healthcare professionals for personal medical decisions."
+
         # Tạo prompt chuẩn xác theo định dạng chat template mà model đã train
         messages = [
-            {"role": "system", "content": "You are a medical question answering assistant. Answer clearly, cautiously, and remind users to consult healthcare professionals for personal medical decisions."},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": question}
         ]
         

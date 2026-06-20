@@ -49,6 +49,15 @@ class DataCleaner:
         r"Copyright.*",
         r"Menu\s+\*",
         r"\[\s*\]\([^)]*\)",
+        # Vietnamese website navigation/breadcrumb noise
+        r"Sức khỏe\s+Quay lại\s+Sức khỏe\s+Quay lại",
+        r"Trang chủ\s*[>\|»/]\s*",
+        r"Quay lại\s+(?:Sức khỏe|Trang chủ|Danh mục)",
+        r"Chia sẻ\s*(?:Facebook|Zalo|Twitter|Copy link).*?(?=\n|$)",
+        r"(?:Đăng nhập|Đăng ký|Menu|Tìm kiếm)(?:\s*\|?\s*)+",
+        r"(?:Bài viết liên quan|Xem thêm|Có thể bạn quan tâm).*?(?=\n|$)",
+        r"(?:Nguồn|Tham khảo)\s*:?\s*https?://\S+",
+        r"^\s*#\s*$",
     ]
 
     def fix_vietnamese_encoding(self, text: str) -> str:
@@ -67,6 +76,21 @@ class DataCleaner:
         text = re.sub(r"[ \t]+", " ", text)
         text = re.sub(r"\n{3,}", "\n\n", text)
         return text.strip()
+
+    def clean_chunk_content(self, content: str) -> str:
+        """Deep clean content: loại bỏ breadcrumbs, sửa encoding, chuẩn hóa."""
+        content = self.fix_vietnamese_encoding(content)
+        content = self.remove_noise(content)
+        # Loại bỏ các dòng chỉ chứa navigation (< 3 từ, không chứa thuật ngữ y khoa)
+        lines = content.split("\n")
+        medical_terms = ["thuốc", "bệnh", "triệu chứng", "liều", "drug", "dose",
+                         "medicine", "treatment", "điều trị", "tác dụng", "chống chỉ định"]
+        cleaned_lines = [
+            line for line in lines
+            if len(line.split()) >= 3 or any(term in line.lower() for term in medical_terms)
+        ]
+        content = "\n".join(cleaned_lines)
+        return self.normalize_whitespace(content)
 
     def validate_chunk(self, chunk: dict[str, Any]) -> bool:
         content = chunk.get("content", "")

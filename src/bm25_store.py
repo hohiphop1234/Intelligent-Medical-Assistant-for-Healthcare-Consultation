@@ -17,12 +17,12 @@ class BM25Store:
     """Keyword index used beside vector search."""
 
     def __init__(self):
-        self.indices: dict[str, Any] = {"vi": None, "en": None}
-        self.documents: dict[str, list[str]] = {"vi": [], "en": []}
-        self.doc_ids: dict[str, list[str]] = {"vi": [], "en": []}
-        self.metadatas: dict[str, list[dict[str, Any]]] = {"vi": [], "en": []}
-        self.tokenized: dict[str, list[list[str]]] = {"vi": [], "en": []}
-        self._idf: dict[str, dict[str, float]] = {"vi": {}, "en": {}}
+        self.indices: dict[str, Any] = {"vi": None}
+        self.documents: dict[str, list[str]] = {"vi": []}
+        self.doc_ids: dict[str, list[str]] = {"vi": []}
+        self.metadatas: dict[str, list[dict[str, Any]]] = {"vi": []}
+        self.tokenized: dict[str, list[list[str]]] = {"vi": []}
+        self._idf: dict[str, dict[str, float]] = {"vi": {}}
 
     def build_index(self, chunks: list[dict[str, Any]], language: str) -> None:
         docs = [self._tokenize(chunk["content"], language) for chunk in chunks]
@@ -101,9 +101,9 @@ class BM25Store:
         self.indices = data["indices"]
         self.documents = data["documents"]
         self.doc_ids = data["doc_ids"]
-        self.metadatas = data.get("metadatas", {"vi": [], "en": []})
-        self.tokenized = data.get("tokenized", {"vi": [], "en": []})
-        self._idf = data.get("idf", {"vi": {}, "en": {}})
+        self.metadatas = data.get("metadatas", {"vi": []})
+        self.tokenized = data.get("tokenized", {"vi": []})
+        self._idf = data.get("idf", {"vi": {}})
         return True
 
     def _tokenize(self, text: str, language: str) -> list[str]:
