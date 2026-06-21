@@ -95,7 +95,7 @@ class ResponseGenerator:
         
         return self.local_llm.generate_answer(
             question=prompt,
-            max_new_tokens=800,
+            max_new_tokens=512,
             system_prompt=SYSTEM_PROMPT
         )
 

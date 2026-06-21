@@ -145,7 +145,6 @@ class LangGraphPipeline:
             }
             
         # Quyết định route: Các danh mục liên quan tới bệnh án, rủi ro cao -> RAG. Cơ bản -> LLM QA.
-        # Ở đây chúng ta sẽ ép các risk categories vào RAG
         rag_categories = {
             "safety", "interactions", "contraindications", "contraindication",
             "pregnancy", "overdose", "pediatric", "patient_query", "case_based", "edge_case"

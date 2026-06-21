@@ -19,7 +19,7 @@ LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.3"))
 LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "2048"))
 
 # Local LLM
-LORA_CHECKPOINT_DIR = str(BASE_DIR / "ckpt" / "qwen3-4b-medical-qa-lora")
+LORA_CHECKPOINT_DIR = str(BASE_DIR / "ckpt" / "qwen3_4b_thinking_meddies_lora")
 
 # Embeddings
 EMBEDDING_MODEL_VI = os.getenv(

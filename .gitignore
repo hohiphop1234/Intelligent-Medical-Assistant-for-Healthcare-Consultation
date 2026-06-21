@@ -4,8 +4,9 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .chainlit/
-models/chromadb/
-models/*.pkl
+
+models/
+
 data/processed/
 data/crawl_cache/
 data/

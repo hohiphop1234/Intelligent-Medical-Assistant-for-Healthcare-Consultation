@@ -52,7 +52,7 @@ async def on_chat_start():
 
 @cl.on_message
 async def on_message(message: cl.Message):
-    result = get_pipeline().process_query(message.content)
+    result = await cl.make_async(get_pipeline().process_query)(message.content)
 
     if result.get("type") in {"emergency", "out_of_scope", "insufficient_evidence"}:
         await cl.Message(content=result["message"]).send()

@@ -39,7 +39,7 @@ class ResponseValidator:
 
         language = response.get("language", "vi")
         risk_level = response.get("risk_level", "medium")
-        response["disclaimer"] = get_disclaimer(risk_level, language)
+        response["disclaimer"] = get_disclaimer(risk_level)
         response["validation_issues"] = issues
         response["is_valid"] = len(issues) == 0
 
