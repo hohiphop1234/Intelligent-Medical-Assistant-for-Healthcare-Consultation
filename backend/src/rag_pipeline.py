@@ -153,19 +153,20 @@ class MedicalRAGPipeline:
     def _retrieval_category_filter(
         self, question: str, classification
     ) -> str | None:
+        # Remove hard category filtering to avoid excluding relevant but miscategorized chunks
         return None
 
     def _retrieval_top_k(self, question: str, classification) -> int:
         if classification.category == "drug_interaction":
-            return TOP_K * 3
+            return TOP_K * 3 + 2
         if (
             classification.category == "pregnancy"
             and should_route_pregnancy_to_drug_safety(question)
             and asks_drug_avoidance(question)
             and not classification.entities
         ):
-            return TOP_K * 4
-        return TOP_K
+            return TOP_K * 4 + 2
+        return TOP_K + 2
 
     def ingest_data(self) -> dict[str, int]:
         ensure_dir(PROCESSED_DATA_DIR)

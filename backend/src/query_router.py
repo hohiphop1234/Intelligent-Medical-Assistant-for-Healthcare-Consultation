@@ -110,6 +110,16 @@ Return:
         scoped, scope_score = self.safety_guard.is_medical_scope(query)
         has_known_drug = bool(entities)
 
+        if any(term in q for term in ["xin chao", "hello", "hi", "hey", "chao ban", "chao ai"]) and len(q.split()) <= 5:
+            return QueryClassification(
+                intent="general_qa",
+                category="general_qa",
+                entities=[],
+                risk_level="low",
+                confidence=1.0,
+                requires_rag=False
+            )
+
         if any(term in q for term in ["qua lieu", "overdose", "poison", "ngo doc", "too many"]):
             category, intent, risk, confidence = (
                 "overdose_triage",

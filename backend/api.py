@@ -28,6 +28,12 @@ def get_pipeline():
         pipeline = LangGraphPipeline()
     return pipeline
 
+@app.on_event("startup")
+async def startup_event():
+    logger.info("Preloading pipeline on startup...")
+    get_pipeline()
+    logger.info("Pipeline preloaded successfully.")
+
 class ChatRequest(BaseModel):
     message: str
 

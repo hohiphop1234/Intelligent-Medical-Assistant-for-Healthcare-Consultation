@@ -12,8 +12,6 @@ EMERGENCY_PATTERNS = [
     r"\bkhong tho duoc\b",
     r"\bdot quy\b",
     r"\bnhoi mau\b",
-    r"\bqua lieu\b",
-    r"\buong qua nhieu\b",
     r"\btu tu\b",
     r"\bmuon chet\b",
     r"\btu gay thuong tich\b",
@@ -23,7 +21,6 @@ EMERGENCY_PATTERNS = [
     r"\bco giat\b",
     r"\bdi ung\b.*\bsung\b",
     r"\bsoc phan ve\b",
-    r"\bngo doc\b",
     r"\bhon me\b",
 ]
 

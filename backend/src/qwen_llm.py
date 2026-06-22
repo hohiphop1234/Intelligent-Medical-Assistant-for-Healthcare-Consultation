@@ -48,10 +48,12 @@ class QwenMedicalLLM:
             "stream": False,
             "options": {
                 "num_predict": max_new_tokens,
-                "num_ctx": 4096,
-                "temperature": 0.15,  # Nhiệt độ rất thấp để ổn định output y tế
+                "num_ctx": 8192,
+                "temperature": 0.15,
                 "top_p": 0.9,
-                "repeat_penalty": 1.15
+                "repeat_penalty": 1.15,
+                "num_batch": 512,
+                "num_gpu": 99
             }
         }
         
@@ -104,10 +106,12 @@ class QwenMedicalLLM:
             "stream": True,
             "options": {
                 "num_predict": max_new_tokens,
-                "num_ctx": 6144,
+                "num_ctx": 8192,
                 "temperature": 0.15,
                 "top_p": 0.9,
-                "repeat_penalty": 1.15
+                "repeat_penalty": 1.15,
+                "num_batch": 512,
+                "num_gpu": 99
             }
         }
         

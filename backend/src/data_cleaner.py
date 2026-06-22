@@ -14,13 +14,11 @@ except ImportError:  # pragma: no cover - optional dependency
 
 
 TOPIC_CATEGORY_MAP = {
-    # Existing keys (crawled data)
     "drug safety": "drug_safety",
     "overdose & triage": "overdose_triage",
     "disease knowledge": "disease_knowledge",
     "pediatric & special populations": "pediatric",
     "pregnancy & lactation": "pregnancy",
-    # New keys (hoangha dataset)
     "pregnancy": "pregnancy",
     "interactions": "drug_interaction",
     "contraindications": "drug_safety",
@@ -134,7 +132,10 @@ class DataCleaner:
         output_path = ensure_dir(output_dir)
 
         counts = {}
-        vi_files = list(raw_path.glob("*vi*.jsonl")) + list(raw_path.glob("*hoangha*.jsonl"))
+        vi_files = set(
+            f for f in (list(raw_path.glob("*vi*.jsonl")) + list(raw_path.glob("*hoangha*.jsonl")))
+            if not f.name.startswith("clean_")
+        )
         
         all_cleaned_rows = []
         for source_file in vi_files:
