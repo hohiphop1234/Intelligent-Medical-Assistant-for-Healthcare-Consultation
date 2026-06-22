@@ -7,18 +7,9 @@ from config import (
     EVIDENCE_THRESHOLD,
     LLM_MODEL,
     MIN_EVIDENCE_CHUNKS,
-    OPENROUTER_API_KEY,
-    OPENROUTER_BASE_URL,
 )
 from src.topic_relevance import pregnancy_hard_reject, pregnancy_relevance_bonus
 from src.utils import normalize_for_match, tokenize
-
-try:
-    from openai import OpenAI
-except ImportError:  # pragma: no cover - optional dependency
-    OpenAI = None
-
-
 @dataclass
 class GradingResult:
     relevant_chunks: list[dict[str, Any]]

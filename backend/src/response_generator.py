@@ -7,8 +7,6 @@ from config import (
     LLM_MAX_TOKENS,
     LLM_MODEL,
     LLM_TEMPERATURE,
-    OPENROUTER_API_KEY,
-    OPENROUTER_BASE_URL,
 )
 from src.query_router import QueryClassification
 from src.topic_relevance import (
@@ -19,11 +17,6 @@ from src.topic_relevance import (
     is_pregnancy_query,
 )
 from src.utils import normalize_for_match, tokenize
-
-try:
-    from openai import OpenAI
-except ImportError:  # pragma: no cover - optional dependency
-    OpenAI = None
 
 from src.qwen_llm import QwenMedicalLLM
 

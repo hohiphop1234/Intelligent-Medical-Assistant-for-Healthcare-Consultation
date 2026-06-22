@@ -11,15 +11,11 @@ if load_dotenv:
 
 BASE_DIR = Path(__file__).resolve().parent
 
-# LLM via OpenRouter
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-LLM_MODEL = os.getenv("LLM_MODEL", "qwen/qwen-plus")
-LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.3"))
+# LLM Config
+LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.15"))
 LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "2048"))
 
 # Local LLM
-# Removed LORA_CHECKPOINT_DIR as we now use GGUF
 
 # Embeddings
 EMBEDDING_MODEL_VI = os.getenv(

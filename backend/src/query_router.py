@@ -7,16 +7,9 @@ from config import (
     CATEGORIES_PATH,
     LLM_MAX_TOKENS,
     LLM_MODEL,
-    OPENROUTER_API_KEY,
-    OPENROUTER_BASE_URL,
 )
 from src.safety_guard import SafetyGuard
 from src.utils import extract_drug_entities, normalize_for_match, safe_json_loads
-
-try:
-    from openai import OpenAI
-except ImportError:  # pragma: no cover - optional dependency
-    OpenAI = None
 
 
 KNOWN_DRUGS = [
@@ -52,50 +45,6 @@ class QueryRouter:
 
     def classify(self, query: str) -> QueryClassification:
         return self._classify_with_rules(query)
-
-    def _classify_with_llm(self, query: str) -> QueryClassification:
-        prompt = f"""Classify this user query for a medical RAG assistant.
-Return JSON only.
-
-Categories:
-drug_safety, drug_interaction, overdose_triage, disease_knowledge,
-pregnancy, pediatric, elderly, general_health, out_of_scope
-
-Rules:
-- All medical questions require RAG.
-- If the query is not medical, category must be out_of_scope.
-- Use critical risk for overdose, emergency, pregnancy, pediatric, and interactions.
-
-Query: {json.dumps(query)}
-
-Return:
-{{"intent":"...","category":"...","entities":["..."],"risk_level":"low|medium|high|critical","confidence":0.0,"requires_rag":true}}"""
-        response = self.client.chat.completions.create(
-            model=LLM_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a strict medical query classifier. Return valid JSON only.",
-                },
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.1,
-            max_tokens=min(LLM_MAX_TOKENS, 300),
-        )
-        content = response.choices[0].message.content or "{}"
-        data = safe_json_loads(content) or {}
-        data["requires_rag"] = data.get("category") != "out_of_scope"
-        classification = self._coerce_classification(data)
-        alias_entities = self._extract_entities(normalize_for_match(query))
-        if alias_entities:
-            classification.entities = sorted(set(classification.entities) | set(alias_entities))
-            classification.requires_rag = True
-            if classification.category == "out_of_scope":
-                classification.category = "drug_safety"
-                classification.intent = "drug_info"
-                classification.risk_level = "high"
-                classification.confidence = max(classification.confidence, 0.82)
-        return classification
 
     def _classify_with_rules(self, query: str) -> QueryClassification:
         q = normalize_for_match(query)
