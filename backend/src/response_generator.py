@@ -5,7 +5,6 @@ from typing import Any
 
 from config import (
     LLM_MAX_TOKENS,
-    LLM_MODEL,
     LLM_TEMPERATURE,
 )
 from src.query_router import QueryClassification

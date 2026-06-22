@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from config import (
     CATEGORIES_PATH,
     LLM_MAX_TOKENS,
-    LLM_MODEL,
 )
 from src.safety_guard import SafetyGuard
 from src.utils import extract_drug_entities, normalize_for_match, safe_json_loads

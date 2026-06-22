@@ -5,7 +5,6 @@ from typing import Any
 
 from config import (
     EVIDENCE_THRESHOLD,
-    LLM_MODEL,
     MIN_EVIDENCE_CHUNKS,
 )
 from src.topic_relevance import pregnancy_hard_reject, pregnancy_relevance_bonus
