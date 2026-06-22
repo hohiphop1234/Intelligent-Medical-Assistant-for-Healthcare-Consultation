@@ -101,11 +101,11 @@ Return:
         q = normalize_for_match(query)
         entities = self._extract_entities(q)
 
-        category = "out_of_scope"
-        intent = "out_of_scope"
-        risk = "none"
+        category = "disease_knowledge"
+        intent = "general_qa"
+        risk = "low"
         confidence = 0.35
-        requires_rag = False
+        requires_rag = True
 
         scoped, scope_score = self.safety_guard.is_medical_scope(query)
         has_known_drug = bool(entities)
@@ -157,7 +157,7 @@ Return:
             )
         elif has_known_drug or any(
             term in q
-            for term in ["thuoc", "drug", "medication", "side effect", "tac dung phu", "dose", "lieu"]
+            for term in ["thuoc", "drug", "medication", "side effect", "tac dung phu", "dose", "lieu", "benh", "trieu chung", "dau", "cam", "ho", "sot", "dieu tri", "chua", "kham", "xu ly", "xu li"]
         ):
             category, intent, risk, confidence = (
                 "drug_safety",

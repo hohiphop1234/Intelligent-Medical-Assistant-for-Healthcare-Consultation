@@ -96,18 +96,64 @@ class MedicalRAGPipeline:
         response["relevant_count"] = len(graded.relevant_chunks)
         return self.response_validator.validate(response, graded.relevant_chunks)
 
+    def stream_query(self, question: str):
+        if self.safety_guard.is_emergency(question):
+            yield {"type": "metadata", "data": {"type": "emergency", "message": self.safety_guard.emergency_response(question)["message"]}}
+            return
+
+        classification = self.query_router.classify(question)
+        if classification.category == "out_of_scope":
+            yield {"type": "metadata", "data": {"type": "out_of_scope", "message": self.safety_guard.out_of_scope_response(question)["message"]}}
+            return
+
+        if classification.confidence < CONFIDENCE_THRESHOLD:
+            yield {"type": "metadata", "data": {"type": "insufficient_evidence", "message": self.safety_guard.insufficient_evidence_response(question)["message"]}}
+            return
+
+        category_filter = self._retrieval_category_filter(question, classification)
+        search_top_k = self._retrieval_top_k(question, classification)
+        results = self.hybrid_retriever.search(
+            question,
+            top_k=search_top_k,
+            category_filter=category_filter,
+        )
+
+        graded = self.evidence_grader.grade(question, results)
+        
+        if not graded.relevant_chunks:
+            yield {"type": "metadata", "data": {"type": "insufficient_evidence", "message": self.safety_guard.insufficient_evidence_response(question)["message"]}}
+            return
+
+        sources = [
+            {
+                "index": i + 1,
+                "id": chunk.get("id", ""),
+                "title": chunk.get("title", ""),
+                "content": chunk.get("content", "")
+            }
+            for i, chunk in enumerate(graded.relevant_chunks)
+        ]
+        
+        from src.safety_guard import get_disclaimer
+        yield {
+            "type": "metadata",
+            "data": {
+                "type": "message",
+                "sources": sources,
+                "category": classification.category,
+                "risk_level": classification.risk_level,
+                "route": "rag",
+                "disclaimer": get_disclaimer(classification.risk_level)
+            }
+        }
+        
+        for token in self.response_generator.generate_stream(question, graded.relevant_chunks, classification):
+            yield {"type": "token", "content": token}
+
     def _retrieval_category_filter(
         self, question: str, classification
     ) -> str | None:
-        if classification.category == "pregnancy" and should_route_pregnancy_to_drug_safety(
-            question
-        ):
-            return "drug_safety"
-        return (
-            classification.category
-            if classification.category in FILTERABLE_CATEGORIES
-            else None
-        )
+        return None
 
     def _retrieval_top_k(self, question: str, classification) -> int:
         if classification.category == "drug_interaction":

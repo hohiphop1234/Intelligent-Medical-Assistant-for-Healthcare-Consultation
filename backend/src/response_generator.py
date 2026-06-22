@@ -38,9 +38,9 @@ SYSTEM_PROMPT = """You are a trusted medical information assistant that synthesi
 5. Always answer in Vietnamese.
 
 ## Answer Structure
-- Start with a **direct, concise answer** to the user's question (1-2 sentences).
-- Then provide **supporting details** organized logically (use bullet points or numbered lists when listing multiple items).
-- If the question asks "which" or "what" (e.g., "thuốc nào", "which drugs"), list specific names/items found in the sources.
+- Start with a **direct, extremely concise answer** to the user's question (1-2 sentences).
+- ONLY provide the most important supporting details. Do NOT write long paragraphs. Keep the entire answer short and straight to the point (under 5-6 sentences total if possible).
+- If the question asks "which" or "what" (e.g., "thuốc nào", "which drugs"), list specific names/items found in the sources briefly.
 - If context documents don't contain a direct answer, explicitly state: "Thông tin trong nguồn dữ liệu không đủ để trả lời trực tiếp câu hỏi này".
 
 ## Quality Guidelines
@@ -84,7 +84,8 @@ class ResponseGenerator:
         }
 
     def _generate_with_llm(self, question: str, chunks: list[dict[str, Any]]) -> str:
-        context = self._build_context(chunks)
+        top_chunks = chunks[:4]
+        context = self._build_context(top_chunks)
         prompt = (
             f"Context documents:\n{context}\n\n"
             f"User question: {question}\n\n"
@@ -95,9 +96,61 @@ class ResponseGenerator:
         
         return self.local_llm.generate_answer(
             question=prompt,
-            max_new_tokens=512,
+            max_new_tokens=2048,
             system_prompt=SYSTEM_PROMPT
         )
+        
+    def _generate_with_llm_stream(
+        self, question: str, chunks: list[dict[str, Any]]
+    ):
+        # Giới hạn số lượng tài liệu gửi vào LLM để không bị tràn VRAM (9000+ tokens)
+        top_chunks = chunks[:4]
+        context = self._build_context(top_chunks)
+        prompt = (
+            f"Context documents:\n{context}\n\n"
+            f"User question: {question}\n\n"
+            "Answer using only the context above. Cite sources with [1], [2], etc. "
+            "Ignore citation numbers that appear inside a context document; only use "
+            "the source numbers assigned to the context documents."
+        )
+        yield from self.local_llm.stream_answer(
+            question=prompt,
+            max_new_tokens=2048,
+            system_prompt=SYSTEM_PROMPT
+        )
+
+    def generate_stream(
+        self,
+        question: str,
+        chunks: list[dict[str, Any]],
+        classification: QueryClassification,
+    ):
+        """Streaming version of answer generator"""
+        # Trực tiếp stream từ LLM mà không sinh câu phụ (disclaimer sẽ được thêm ở api.py)
+        # Các logic interaction/side_effect (câu trả lời soạn sẵn) có thể trả về một cục
+        
+        if classification.category == "drug_interaction":
+            interaction_answer = self._generate_interaction_answer(
+                question, chunks, classification.entities, intro="Dựa trên các nguồn được truy xuất:", closing="Vui lòng trao đổi với bác sĩ hoặc dược sĩ trước khi áp dụng."
+            )
+            if interaction_answer is not None:
+                yield interaction_answer[0]
+                return
+
+        if self._is_side_effect_question(question):
+            side_effect_answer = self._generate_side_effect_answer(
+                chunks, intro="Dựa trên các nguồn được truy xuất:", closing="Vui lòng trao đổi với bác sĩ hoặc dược sĩ trước khi áp dụng."
+            )
+            if side_effect_answer is not None:
+                yield side_effect_answer[0]
+                return
+                
+        try:
+            yield from self._generate_with_llm_stream(question, chunks)
+        except Exception as e:
+            print(f"\n[RAG Pipeline] Local LLM Stream Failed: {e}\n")
+            ans, _ = self._generate_extractive(question, chunks, classification)
+            yield ans
 
     def _build_context(self, chunks: list[dict[str, Any]]) -> str:
         parts = []

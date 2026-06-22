@@ -35,7 +35,7 @@ CHROMA_PERSIST_DIR = str(BASE_DIR / "models" / "chromadb")
 COLLECTION_NAME_VI = "medical_rag_vi"
 
 # Retrieval
-TOP_K = int(os.getenv("TOP_K", "8"))
+TOP_K = int(os.getenv("TOP_K", "3"))
 VECTOR_WEIGHT = float(os.getenv("VECTOR_WEIGHT", "0.6"))
 BM25_WEIGHT = float(os.getenv("BM25_WEIGHT", "0.4"))
 EVIDENCE_THRESHOLD = float(os.getenv("EVIDENCE_THRESHOLD", "0.5"))

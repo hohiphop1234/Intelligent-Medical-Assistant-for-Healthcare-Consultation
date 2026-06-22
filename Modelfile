@@ -1,0 +1,13 @@
+FROM ./models/qwen3-4b-thinking.gguf
+
+TEMPLATE """{{ if .System }}<|im_start|>system
+{{ .System }}<|im_end|>
+{{ end }}{{ if .Prompt }}<|im_start|>user
+{{ .Prompt }}<|im_end|>
+{{ end }}<|im_start|>assistant
+"""
+
+PARAMETER temperature 0.15
+PARAMETER top_p 0.90
+PARAMETER repeat_penalty 1.15
+PARAMETER num_ctx 4096

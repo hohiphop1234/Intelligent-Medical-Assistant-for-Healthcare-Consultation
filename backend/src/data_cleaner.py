@@ -14,11 +14,23 @@ except ImportError:  # pragma: no cover - optional dependency
 
 
 TOPIC_CATEGORY_MAP = {
+    # Existing keys (crawled data)
     "drug safety": "drug_safety",
     "overdose & triage": "overdose_triage",
     "disease knowledge": "disease_knowledge",
     "pediatric & special populations": "pediatric",
     "pregnancy & lactation": "pregnancy",
+    # New keys (hoangha dataset)
+    "pregnancy": "pregnancy",
+    "interactions": "drug_interaction",
+    "contraindications": "drug_safety",
+    "contraindication": "drug_safety",
+    "safety": "drug_safety",
+    "overdose": "overdose_triage",
+    "pediatric": "pediatric",
+    "edge_case": "drug_safety",
+    "case_based": "drug_safety",
+    "patient_query": "disease_knowledge",
 }
 
 CATEGORY_RISK_MAP = {

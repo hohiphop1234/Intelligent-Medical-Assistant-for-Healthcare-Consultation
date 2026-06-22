@@ -10,10 +10,7 @@ from config import (
 )
 from src.utils import tokenize, stable_hash
 
-try:
-    from sentence_transformers import SentenceTransformer
-except ImportError:  # pragma: no cover - optional dependency
-    SentenceTransformer = None
+# sentence_transformers import has been moved to _load_model
 
 class EmbeddingManager:
     """Embedding manager with a deterministic fallback."""
@@ -53,13 +50,17 @@ class EmbeddingManager:
         return FALLBACK_EMBEDDING_DIM
 
     def _load_model(self) -> Any | None:
-        if FORCE_FALLBACK_EMBEDDINGS or SentenceTransformer is None or self._model_failed:
+        if FORCE_FALLBACK_EMBEDDINGS or self._model_failed:
             return None
         if self._model is not None:
             return self._model
         try:
-            self._model = SentenceTransformer(EMBEDDING_MODEL_VI)
+            from sentence_transformers import SentenceTransformer
+            self._model = SentenceTransformer(EMBEDDING_MODEL_VI, device='cpu')
             return self._model
+        except ImportError:
+            self._model_failed = True
+            return None
         except Exception:
             self._model_failed = True
             if not self.allow_fallback:
