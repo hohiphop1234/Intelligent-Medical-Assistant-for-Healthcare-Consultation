@@ -1,596 +1,250 @@
-# Intelligent Medical Assistant RAG
+# 🏥 Hệ thống Trợ lý Y tế Thông minh (Intelligent Medical Assistant RAG)
 
-Educational Vietnamese medical RAG prototype for healthcare consultation support.
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688.svg)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-19.0%2B-61DAFB.svg)](https://react.dev/)
+[![LangGraph](https://img.shields.io/badge/LangGraph-Workflow-orange.svg)](https://langchain-ai.github.io/langgraph/)
+[![Ollama](https://img.shields.io/badge/Ollama-Local__LLM-black.svg)](https://ollama.ai/)
 
-This project builds a retrieval-augmented generation pipeline over a small
-Vietnamese medical dataset. It is designed to answer only from retrieved evidence, classify
-medical query categories, detect emergencies, refuse out-of-scope questions, and
-attach source citations to generated answers.
+Hệ thống Trợ lý Y tế Thông minh hỗ trợ tư vấn sức khỏe bằng tiếng Việt, được xây dựng trên kiến trúc **Full-stack hiện đại (React + FastAPI)** kết hợp mô hình điều phối luồng **LangGraph Workflow** và tìm kiếm tăng cường độ chính xác cao (**Hybrid RAG**).
 
-> Important: this is an educational prototype. It does not provide diagnosis,
-> prescriptions, or personal medical advice. For urgent symptoms, users should
-> contact emergency services or a qualified healthcare professional.
+> [!IMPORTANT]
+> **Tuyên bố Miễn trừ Trách nhiệm Y tế (Medical Disclaimer):**
+> Đây là nguyên mẫu nghiên cứu & giáo dục hỗ trợ tư vấn y tế. Hệ thống **KHÔNG** thay thế chẩn đoán, đơn thuốc hay lời khuyên điều trị từ bác sĩ chuyên khoa. Đối với các triệu chứng cấp cứu hoặc chuyển biến nặng, người dùng phải lập tức liên hệ cơ sở y tế gần nhất hoặc gọi tổng đài cấp cứu (115).
 
-## What This Project Does
+---
 
-- Cleans crawled medical documents from `data/raw`.
-- Builds Vietnamese RAG chunks.
-- Creates text embeddings.
-- Stores vectors in ChromaDB.
-- Builds a BM25 keyword index.
-- Combines vector search and BM25 with Reciprocal Rank Fusion.
-- Routes questions into medical categories.
-- Detects emergency queries before retrieval.
-- Refuses out-of-scope questions.
-- Grades retrieved evidence before answering.
-- Optionally crawls trusted medical sources if local evidence is weak.
-- Generates cited answers.
-- Validates answers for citations and unsafe medical claims.
-- Provides both CLI and Chainlit UI.
-- Includes evaluation data and tests for safety behavior.
+## 🌟 Điểm nhấn & Định hướng Công nghệ (Current Direction)
 
-## Current Dataset
+Dự án được phát triển theo hướng đi chuẩn xác và hiện đại nhất cho các hệ thống tư vấn y khoa tự trị (Agentic Medical AI):
 
-Raw source files are stored in:
+1. **Kiến trúc Full-stack Độc lập & Hiện đại:**
+   - **Backend API:** Sử dụng **FastAPI** hiệu năng cao, hỗ trợ truy vấn RESTful API (`/api/chat`), truyền phát dữ liệu thời gian thực qua Server-Sent Events (SSE Streaming `/api/chat/stream`) và cung cấp thống kê hệ thống.
+   - **Frontend UI:** Giao diện người dùng web động, tối ưu trải nghiệm (UX/UI) được xây dựng bằng **React + Vite**, dễ dàng tùy biến và triển khai trên mọi thiết bị.
 
-```text
-data/raw/
-  rag_chunks_vi.jsonl
-  clean_rag_chunks_vi.jsonl
-  clean_rag_chunks_vi_report.json
-  crawl_log.csv
-  source_statistics.csv
-```
+2. **Đuờng ống Điều phối Thông minh với LangGraph (`LangGraphPipeline`):**
+   - Không sử dụng luồng hỏi đáp tuyến tính cứng nhắc. Câu hỏi được luân chuyển qua đồ thị trạng thái (`StateGraph`) với các nút (Node) chuyên biệt.
+   - **Node Kiểm duyệt An toàn (Safety Guard):** Nhận diện các từ khóa/tình huống khẩn cấp (nhồi máu cơ tim, đột quỵ, tự tử, ngộ độc...) ngay tại cửa ngõ để phát ra phản hồi khẩn cấp lập tức mà không tốn thời gian suy luận LLM.
+   - **Node Phân loại & Định tuyến (Query Router):** Phân loại danh mục y khoa (`drug_safety`, `interactions`, `pregnancy`, `overdose`...) và đánh giá mức độ rủi ro (`low`, `medium`, `high`, `critical`) để định tuyến xử lý tối ưu sang 2 luồng riêng biệt:
+     - *Nhánh RAG (`rag_node`):* Kích hoạt cho các câu hỏi y khoa chuyên sâu hoặc có rủi ro cao/nghiêm trọng (tác dụng phụ, liều dùng, thai kỳ...). Hệ thống tìm kiếm bằng chứng từ ChromaDB & BM25 trước khi LLM tổng hợp câu trả lời kèm trích dẫn.
+     - *Nhánh General QA (`general_qa_node`):* Kích hoạt cho các câu chào hỏi giao tiếp cơ bản hoặc câu hỏi sức khỏe chung chung có rủi ro thấp/trung bình. Câu hỏi được bỏ qua bước tìm kiếm RAG để gửi thẳng tới mô hình LLM cục bộ (`QwenMedicalLLM`) trả lời siêu tốc.
 
-Processed/generated data is written to:
+3. **Tìm kiếm Lai Tối ưu (Hybrid Retrieval + RRF):**
+   - Kết hợp tìm kiếm ngữ nghĩa sâu (Semantic Vector Search qua **ChromaDB**) và tìm kiếm từ khóa chính xác (Lexical Search qua **BM25**).
+   - Thuật toán **Reciprocal Rank Fusion (RRF)** dung hợp kết quả từ hai bộ máy, loại bỏ nhiễu và đưa ra bằng chứng liên quan nhất.
 
-```text
-data/processed/
-models/
-```
+4. **Thẩm định Bằng chứng & Tự động Bổ sung Kiến thức (Evidence Grader & Web Crawler):**
+   - Bằng chứng truy xuất được tự động chấm điểm độ tin cậy. Nếu dữ liệu nội bộ không đủ độ tin cậy, hệ thống kích hoạt **Crawler chuyên dụng** tìm kiếm bổ sung từ các nguồn y khoa uy tín hàng đầu thế giới (`medlineplus.gov`, `dailymed.nlm.nih.gov`, `fda.gov`, `who.int`).
 
-These generated directories are ignored by git.
+5. **Tối ưu hóa AI Cục bộ (Local LLM với Ollama):**
+   - Hỗ trợ chạy các mô hình tinh chỉnh y tế cục bộ (như `Qwen3-4B-Medical` qua **Ollama** hoặc các mô hình GGUF) giúp bảo mật tuyệt đối thông tin nhạy cảm của người bệnh, tốc độ phản hồi siêu tốc và khả năng hoạt động offline.
 
-The current processed dataset size after cleaning is approximately:
+---
 
-```text
-Vietnamese chunks: 216
-```
+## 🏗️ Kiến trúc Hệ thống (System Architecture)
 
-When `clean_rag_chunks_vi.jsonl` is present, the data cleaner uses it for the
-Vietnamese collection instead of the noisier raw `rag_chunks_vi.jsonl`.
-
-## Project Structure
-
-```text
-.
-├── app.py                         # Chainlit UI
-├── chainlit.md                    # Chainlit welcome/about content
-├── config.py                      # Central configuration
-├── main.py                        # CLI entry point
-├── requirements.txt               # Python dependencies
-├── data/
-│   ├── categories.json            # Medical category definitions
-│   └── raw/                       # Raw RAG input data
-├── evaluation/
-│   ├── eval_dataset.json          # Evaluation questions
-│   └── evaluate.py                # Custom evaluator
-├── src/
-│   ├── bm25_store.py              # Keyword retrieval
-│   ├── data_cleaner.py            # Cleaning and metadata enrichment
-│   ├── embeddings.py              # Embedding manager
-│   ├── evidence_grader.py         # Evidence quality grading
-│   ├── hybrid_retriever.py        # Vector + BM25 fusion
-│   ├── query_router.py            # Medical query classification
-│   ├── rag_pipeline.py            # End-to-end orchestration
-│   ├── response_generator.py      # Cited answer generation
-│   ├── response_validator.py      # Post-generation checks
-│   ├── safety_guard.py            # Emergency/scope/disclaimer layer
-│   ├── utils.py                   # Shared helpers
-│   ├── vector_store.py            # ChromaDB wrapper
-│   └── web_crawler.py             # Trusted-source crawl fallback
-└── tests/
-    ├── test_query_router.py
-    ├── test_retrieval.py
-    └── test_safety.py
-```
-
-## Architecture
+Sơ đồ dưới đây mô tả luồng xử lý thực tế của hệ thống từ khi tiếp nhận câu hỏi đến khi trả lời:
 
 ```mermaid
 flowchart TD
-    A["User question"] --> C["Emergency detection"]
-    C -->|Emergency| D["Emergency response only"]
-    C -->|Not emergency| E["Query router"]
-    E -->|Out of scope| F["Refusal response"]
-    E -->|In scope| G["Hybrid retrieval"]
-    G --> H["Vector search: ChromaDB"]
-    G --> I["Keyword search: BM25"]
-    H --> J["RRF fusion"]
-    I --> J
-    J --> K["Evidence grader"]
-    K -->|Weak evidence| L["Trusted web crawl fallback"]
-    L --> K
-    K -->|Insufficient| M["Insufficient evidence response"]
-    K -->|Sufficient| N["Response generator"]
-    N --> O["Response validator"]
-    O --> P["Answer with citations + disclaimer"]
+    User["Người dùng (Web UI / CLI)"] --> API["FastAPI Server (/api/chat)"]
+    API --> Graph["LangGraph Workflow"]
+    
+    subgraph LangGraph ["Đồ thị xử lý LangGraph Pipeline"]
+        Entry["Safety Check Node"]
+        Entry -->|Phát hiện Cấp cứu| Emerg["Phản hồi Khẩn cấp / Gọi Cấp cứu"]
+        Entry -->|An toàn| Router["Query Router / Classifier Node"]
+        
+        Router -->|Ngoài phạm vi| OutScope["Phản hồi Từ chối (Out-of-scope)"]
+        Router -->|Thiếu dữ kiện| Insuff["Phản hồi Yêu cầu thêm thông tin"]
+        
+        Router -->|Rủi ro Cao / Chuyên sâu| RAGNode["Nhánh RAG (RAG Node)"]
+        Router -->|Rủi ro Thấp / Cơ bản| LLMNode["Nhánh QA (General QA Node)"]
+        
+        subgraph RAG ["Luồng Hybrid RAG Pipeline"]
+            Ret["Hybrid Retrieval (ChromaDB + BM25)"] --> RRF["Dung hợp RRF"]
+            RRF --> Grader["Thẩm định bằng chứng (Evidence Grader)"]
+            Grader -->|Bằng chứng yếu| Web["Cào dữ liệu uy tín (MedlinePlus, FDA, WHO)"]
+            Web --> Grader
+            Grader -->|Đạt yêu cầu| Gen["Sinh câu trả lời kèm Trích dẫn"]
+        end
+        
+        RAGNode --> Ret
+        LLMNode --> LocalLLM["Ollama Local LLM (Qwen-Medical)"]
+    end
+    
+    Gen --> Validator["Kiểm định & Gắn cảnh báo rủi ro (Response Validator)"]
+    LocalLLM --> Validator
+    Emerg --> Output["Trở về kết quả cho Người dùng"]
+    OutScope --> Output
+    Insuff --> Output
+    Validator --> Output
 ```
 
-## Setup
+---
 
-Commands below assume Windows PowerShell.
+## 📂 Cấu trúc Thư mục Dự án
 
-### 1. Create and Activate a Virtual Environment
+```text
+.
+├── backend/                       # Backend API Server & Xử lý RAG lõi
+│   ├── api.py                     # Máy chủ FastAPI (REST API & SSE Streaming)
+│   ├── main.py                    # Giao diện CLI hỗ trợ kiểm thử & Ingest dữ liệu
+│   ├── config.py                  # Cấu hình tham số trung tâm
+│   ├── requirements.txt           # Danh sách thư viện Python
+│   ├── data/                      # Dữ liệu y khoa (raw, processed, categories.json)
+│   ├── evaluation/                # Bộ kiểm thử & đánh giá tự động (RAGAs / Custom)
+│   └── src/                       # Các module xử lý nghiệp vụ lõi
+│       ├── langgraph_pipeline.py  # Điều phối workflow bằng LangGraph
+│       ├── rag_pipeline.py        # Luồng xử lý RAG truyền thống
+│       ├── hybrid_retriever.py    # Kết hợp Vector Store + BM25 + RRF
+│       ├── qwen_llm.py            # Giao tiếp với Ollama Local LLM
+│       ├── safety_guard.py        # Bảo vệ, phát hiện cấp cứu & từ chối
+│       ├── evidence_grader.py     # Chấm điểm độ tin cậy bằng chứng
+│       ├── web_crawler.py         # Tìm kiếm fallback từ nguồn uy tín
+│       └── ...
+├── frontend/                      # Giao diện Web App
+│   ├── src/                       # Mã nguồn React UI (Components, Hooks)
+│   ├── package.json               # Cấu hình & thư viện NodeJS
+│   └── vite.config.js             # Cấu hình Vite bundler
+├── notebooks/                     # Nghiên cứu, thực nghiệm & fine-tuning
+│   ├── 01-train-qwen3-medical-qa.ipynb # Huấn luyện LLM y tế
+│   └── 03_clean_rag_chunks_vi.ipynb    # Làm sạch dữ liệu RAG tiếng Việt
+├── models/                        # Thư mục lưu trữ cơ sở dữ liệu Vector & trọng số
+├── Modelfile                      # Định nghĩa cấu hình Ollama cho model Qwen Medical
+└── README.md                      # Tài liệu hướng dẫn hệ thống
+```
+
+---
+
+## 🚀 Hướng dẫn Cài đặt & Khởi chạy
+
+Các lệnh dưới đây được hướng dẫn trên môi trường **Windows PowerShell**.
+
+### 1. Chuẩn bị Môi trường Backend
+
+Tạo môi trường ảo, kích hoạt và cài đặt các thư viện cần thiết:
 
 ```powershell
+# Di chuyển vào thư mục dự án
+cd path\to\Intelligent-Medical-Assistant-for-Healthcare-Consultation
+
+# Tạo và kích hoạt virtual environment
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
+
+# Cài đặt các gói phụ thuộc cho Backend
+pip install --upgrade pip
+pip install -r backend/requirements.txt
 ```
 
-If PowerShell blocks activation:
+> [!NOTE]
+> Nếu PowerShell chặn lệnh kích hoạt do chính sách bảo mật, hãy chạy lệnh sau trước:
+> `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`
 
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\.venv\Scripts\Activate.ps1
-```
-
-### 2. Install Dependencies
-
-```powershell
-pip install -r requirements.txt
-```
-
-### 3. Configure Environment Variables
-
-Create or edit `.env`:
-
+Cấu hình biến môi trường bằng cách tạo file `backend/.env` (hoặc sao chép từ `backend/.env.example`):
 ```env
-OPENROUTER_API_KEY=your_key_here
-```
+# Optional: Thiết lập token HuggingFace để tránh giới hạn tải model embedding
+HF_TOKEN=your_huggingface_token_here
 
-Optional variables:
-
-```env
-LLM_MODEL=qwen/qwen3.6-plus
+# Đặt true nếu muốn chạy chế độ test nhanh bằng hash embedding thay vì tải model thật
 FORCE_FALLBACK_EMBEDDINGS=false
-HF_TOKEN=your_huggingface_token_optional
 ```
 
-`HF_TOKEN` is optional. It only helps avoid HuggingFace rate limits and can make
-downloads smoother.
+### 2. Chuẩn bị Mô hình Local AI (Ollama)
 
-## Embedding Modes
+Hệ thống hoạt động 100% cục bộ (Local AI), không phụ thuộc vào API bên thứ ba để đảm bảo quyền riêng tư dữ liệu y tế. Bạn cần chuẩn bị Ollama:
+1. Cài đặt [Ollama](https://ollama.ai/).
+2. Tạo model y tế từ `Modelfile` có sẵn trong dự án:
+   ```powershell
+   ollama create qwen_medical -f Modelfile
+   ```
 
-The project supports two embedding modes.
+### 3. Chuẩn bị Cơ sở Dữ liệu Kiến thức (Data Ingestion)
 
-### Production Mode: Real Models
+Trước khi hỏi đáp, cần nạp dữ liệu y khoa, tạo embedding vector (ChromaDB) và chỉ mục từ khóa (BM25):
 
 ```powershell
-$env:FORCE_FALLBACK_EMBEDDINGS='false'
+cd backend
 python main.py --ingest
 ```
 
-This uses:
+*Kết quả mong đợi:* Hệ thống làm sạch dữ liệu từ `data/raw`, tạo chunk tiếng Việt và lưu trữ vào `data/processed` cùng `models/chromadb`.
 
-```text
-VI: Dqdung205/medical_vietnamese_embedding
+### 4. Khởi chạy Hệ thống Full-stack
+
+Bạn cần mở 2 cửa sổ terminal riêng biệt cho Backend và Frontend.
+
+#### 🌐 Terminal 1: Khởi chạy Backend API (FastAPI)
+```powershell
+.\.venv\Scripts\Activate.ps1
+cd backend
+python api.py
 ```
+*Backend API Server sẽ lắng nghe tại:* `http://localhost:8000` (Tài liệu Swagger UI tại `http://localhost:8000/docs`).
 
-The first run may download several GB of model weights.
+#### 🖥️ Terminal 2: Khởi chạy Frontend Web UI (React + Vite)
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+*Giao diện Web App sẽ chạy tại:* `http://localhost:5173`. Open trình duyệt và bắt đầu trải nghiệm tư vấn sức khỏe!
 
-### Fast Test Mode: Hash Fallback
+---
+
+## 💻 Trải nghiệm qua Giao diện CLI (Đóng gói tiện lợi)
+
+Bên cạnh Web UI, bạn có thể kiểm thử trực tiếp luồng RAG hoặc LangGraph qua giao diện dòng lệnh (CLI):
 
 ```powershell
-$env:FORCE_FALLBACK_EMBEDDINGS='true'
-python main.py --ingest
-```
+cd backend
 
-This avoids downloading HuggingFace models. It is useful for debugging the
-pipeline, but answer quality will be lower.
+# Hỏi một câu hỏi đơn lẻ
+python main.py --query "Tác dụng phụ của thuốc warfarin là gì?"
 
-## Ingest Data
-
-Run:
-
-```powershell
-python main.py --ingest
-```
-
-Expected output:
-
-```text
-Ingesting data...
-Done: {'vi_count': 216, 'bm25_vi_count': 216}
-```
-
-The ingest step:
-
-1. Cleans raw JSONL data.
-2. Writes cleaned chunks to `data/processed`.
-3. Generates embeddings.
-4. Stores vectors in ChromaDB.
-5. Builds and saves BM25 index.
-
-Note: `--ingest` resets vector collections before rebuilding them. This prevents
-ChromaDB embedding-dimension mismatch errors when switching between fallback and
-real embedding models.
-
-## Run the CLI
-
-Ask one question:
-
-```powershell
-python main.py --query "tác dụng phụ của warfarin"
-```
-
-Show raw JSON:
-
-```powershell
+# Hiển thị cấu trúc JSON chi tiết (bao gồm độ tin cậy, danh mục, nguồn trích dẫn)
 python main.py --query "Tôi có thể uống ibuprofen cùng với warfarin không?" --json
-```
 
-Interactive mode:
-
-```powershell
+# Chế độ hỏi đáp tương tác liên tục (Interactive Mode)
 python main.py
 ```
 
-Then type questions until `quit` or `exit`.
+---
 
-## Run the Chainlit UI
+## 🧪 Đánh giá & Kiểm thử Chất lượng (Evaluation & Testing)
 
-```powershell
-chainlit run app.py
-```
+Dự án tích hợp sẵn bộ kiểm thử tự động để đảm bảo tính an toàn y khoa tuyệt đối.
 
-Open the local URL printed by Chainlit, usually:
-
-```text
-http://localhost:8000
-```
-
-If you edit code while Chainlit is running, restart the server to ensure changes
-are loaded.
-
-## Example Test Questions
-
-In-scope RAG:
-
-```text
-tác dụng phụ của warfarin
-Warfarin có tương tác với Ibuprofen không?
-```
-
-Out-of-scope:
-
-```text
-Thời tiết hôm nay thế nào?
-Giúp mình code Python
-```
-
-Emergency:
-
-```text
-Tôi uống quá liều paracetamol phải làm sao?
-Tôi muốn tự tử
-```
-
-Emergency questions should bypass RAG and return an emergency response.
-
-## Evaluation
-
-Run:
+### Kiểm thử tự động (Unit / Integration Tests)
+Chạy kiểm thử các vi kịch bản: nhận diện cấp cứu, từ chối câu hỏi ngoài phạm vi, và độ chính xác phân loại:
 
 ```powershell
+cd backend
+python -m pytest evaluation/ -q
+```
+
+### Chạy bộ Đánh giá Chuẩn (Evaluation Pipeline)
+Đánh giá các chỉ số cốt lõi (Emergency Detection Rate, Out-of-scope Refusal, Citation Accuracy, Disclaimer Presence):
+
+```powershell
+cd backend
 python evaluation/evaluate.py
 ```
 
-Expected metrics from the current project state:
+---
 
-```text
-Emergency Detection:     100%
-Out-of-scope Refusal:    90%
-Citation Accuracy:       93%
-Disclaimer Presence:     100%
-Prohibited Content Rate: 0%
-```
+## 🛡️ Tiêu chuẩn An toàn Y khoa (Safety Protocols)
 
-Run with ingest first:
+Hệ thống tuân thủ nghiêm ngặt 4 nguyên tắc bảo vệ:
+1. **Ưu tiên Cấp cứu (Emergency Triage):** Nhận diện tức thì các từ khóa nguy hiểm đến tính mạng (đau ngực dữ dội, khó thở, ngộ độc, ý định tự sát...) để đưa ra chỉ dẫn gọi 115 lập tức.
+2. **Phạm vi Y khoa (Scope Restriction):** Chỉ trả lời các câu hỏi liên quan đến bệnh lý, thông tin thuốc, tương tác thuốc, chăm sóc sức khỏe thai kỳ/nhi khoa/người già. Từ chối câu hỏi lập trình, thời tiết, giải trí...
+3. **Trích dẫn Minh bạch (Mandatory Citation):** Mọi câu trả lời thuộc nhóm rủi ro cao buộc phải dựa trên bằng chứng RAG và ghi rõ nguồn tham khảo.
+4. **Cảnh báo Rủi ro Phân cấp (Risk-based Disclaimers):** Tự động đính kèm khuyến cáo dựa trên mức độ rủi ro (Ví dụ: câu hỏi về thai kỳ và nhi khoa luôn có cảnh báo rủi ro cao/nghiêm trọng).
 
-```powershell
-python evaluation/evaluate.py --ingest
-```
+---
 
-Print raw JSON:
+## 💡 Hướng dẫn Xử lý Sự cố (Troubleshooting)
 
-```powershell
-python evaluation/evaluate.py --json
-```
-
-## Tests
-
-After installing dependencies:
-
-```powershell
-python -m pytest tests -q
-```
-
-The tests cover:
-
-- Emergency detection.
-- Medical scope classification.
-- Query routing.
-- Basic hybrid retrieval behavior.
-
-## Safety Design
-
-The safety layer is intentionally run before normal RAG.
-
-### Emergency Detection
-
-Emergency patterns include:
-
-- Severe chest pain.
-- Difficulty breathing.
-- Stroke or heart attack wording.
-- Overdose or poisoning.
-- Suicidal intent or self-harm.
-- Severe bleeding.
-- Seizure or unconsciousness.
-- Anaphylaxis-like allergic reactions.
-
-Emergency questions return an emergency message and do not go through normal
-RAG answering.
-
-### Scope Classification
-
-The assistant supports these categories:
-
-- `drug_safety`
-- `drug_interaction`
-- `overdose_triage`
-- `disease_knowledge`
-- `pregnancy`
-- `pediatric`
-- `elderly`
-
-Non-medical questions are refused.
-
-### Evidence Rules
-
-For medical answers:
-
-- The assistant should answer from retrieved evidence.
-- Citations are required.
-- Insufficient evidence should trigger refusal or crawl fallback.
-- Answers must not diagnose, prescribe, or recommend personal dosage changes.
-
-### Disclaimers
-
-The response validator attaches risk-based disclaimers:
-
-- Low risk.
-- Medium risk.
-- High risk.
-- Critical risk.
-
-Drug interactions, pregnancy, pediatric cases, overdose, and emergency-adjacent
-questions are treated more cautiously.
-
-## Trusted Crawl Fallback
-
-`src/web_crawler.py` only allows trusted domains:
-
-```text
-medlineplus.gov
-dailymed.nlm.nih.gov
-fda.gov
-who.int
-cdc.gov
-```
-
-Crawl fallback is only used when local evidence is weak. Local dataset retrieval
-is attempted first.
-
-## GPU Notes
-
-GPU helps mostly during embedding generation.
-
-Check whether PyTorch sees CUDA:
-
-```powershell
-python -c "import torch; print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'No GPU')"
-```
-
-If CUDA is available, `sentence-transformers` usually uses it automatically. If
-not, embeddings will run on CPU and may be much slower.
-
-The current dataset is small, so CPU is acceptable. GPU becomes much more useful
-when scaling to thousands of chunks.
-
-## Troubleshooting
-
-### ChromaDB Dimension Error
-
-Error example:
-
-```text
-Collection expecting embedding with dimension of 384, got 1024
-```
-
-Cause:
-
-- You previously ingested with fallback embeddings.
-- Then you switched to real embedding models.
-- ChromaDB collections were created with the old dimension.
-
-Current code resets ChromaDB collections during `--ingest`, so normally this is
-fixed by rerunning:
-
-```powershell
-python main.py --ingest
-```
-
-If the error persists:
-
-```powershell
-Remove-Item -Recurse -Force .\models\chromadb
-python main.py --ingest
-```
-
-### `ModuleNotFoundError: No module named ...`
-
-Most likely the virtual environment is not active.
-
-Run:
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-```
-
-Then retry the command.
-
-### Chainlit Not Found
-
-```text
-ModuleNotFoundError: No module named 'chainlit'
-```
-
-Install dependencies inside the venv:
-
-```powershell
-pip install -r requirements.txt
-```
-
-### HuggingFace Unauthenticated Warning
-
-Warning:
-
-```text
-You are sending unauthenticated requests to the HF Hub.
-```
-
-This is not fatal. To reduce rate-limit issues, set a HuggingFace token:
-
-```powershell
-$env:HF_TOKEN='your_token_here'
-```
-
-### Windows Symlink Cache Warning
-
-Warning:
-
-```text
-huggingface_hub cache-system uses symlinks by default...
-```
-
-This is not fatal. It means the model cache may use more disk space. To improve
-it, enable Windows Developer Mode or run as administrator.
-
-To hide the warning:
-
-```powershell
-$env:HF_HUB_DISABLE_SYMLINKS_WARNING='1'
-```
-
-### Ingest Is Slow
-
-The slow part is usually embedding generation, especially with `BAAI/bge-m3`.
-
-Options:
-
-- Use GPU/CUDA.
-- Use fallback mode for debugging.
-- Use a smaller embedding model.
-- Add disk embedding cache.
-- Avoid rerunning ingest unless data or models change.
-
-### Bad Answer Quality
-
-Try this order:
-
-1. Run the CLI with `--json` to inspect category, sources, and confidence.
-3. Inspect retrieved sources.
-4. Improve `data_cleaner.py` noise removal.
-5. Add more category keywords in `data/categories.json`.
-6. Improve `response_generator.py` for the specific intent.
-7. Re-run `python evaluation/evaluate.py`.
-
-Example:
-
-```powershell
-python main.py --query "tác dụng phụ của warfarin" --json
-```
-
-## Development Workflow
-
-Recommended workflow:
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-python main.py --ingest
-python main.py --query "tác dụng phụ của warfarin"
-python evaluation/evaluate.py
-chainlit run app.py
-```
-
-After code changes:
-
-```powershell
-python -m compileall config.py src main.py app.py evaluation tests
-python evaluation/evaluate.py
-```
-
-## Important Limitations
-
-- The dataset is small and not comprehensive.
-- Some raw data contains crawled page noise such as navigation text.
-- The assistant is not a clinician.
-- The system must not be used for diagnosis or treatment decisions.
-- Live crawl quality depends on source structure and network availability.
-- LLM output quality depends on `OPENROUTER_API_KEY` and model behavior.
-- For real deployment, add stronger medical QA, audit logs, source versioning,
-  privacy handling, and clinician review.
-
-## Suggested Next Improvements
-
-- Add embedding disk cache to avoid recomputing embeddings.
-- Add entity-aware retrieval filters for drug names.
-- Improve Vietnamese answer formatting.
-- Add source freshness timestamps.
-- Add more official medical sources.
-- Add a clinician-reviewed evaluation set.
-- Add structured answer templates per category.
-- Add stricter contradiction handling between sources.
-- Add a dataset coverage report by category and entity.
-
-## Quick Command Reference
-
-```powershell
-# Activate venv
-.\.venv\Scripts\Activate.ps1
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Ingest data
-python main.py --ingest
-
-# Ask one question
-python main.py --query "tác dụng phụ của warfarin"
-
-# Ask one question and show JSON
-python main.py --query "Tôi có thể uống ibuprofen cùng với warfarin không?" --json
-
-# Run evaluation
-python evaluation/evaluate.py
-
-# Run tests
-python -m pytest tests -q
-
-# Start UI
-chainlit run app.py
-```
+- **Lỗi `Collection expecting embedding with dimension...`:** Xảy ra khi chuyển đổi mô hình embedding (giữa fallback hash và mô hình thật). Khắc phục bằng cách nạp lại dữ liệu: `cd backend && python main.py --ingest`.
+- **Lỗi không kết nối được Ollama:** Đảm bảo dịch vụ Ollama đang chạy ngầm trên máy (`http://localhost:11434`) và đã tải model `qwen_medical`. Nếu LLM gặp lỗi, pipeline RAG được thiết kế để tự động kích hoạt cơ chế rút trích thông tin trực tiếp (extractive fallback) từ tài liệu RAG nhằm đảm bảo phản hồi không bị gián đoạn.
