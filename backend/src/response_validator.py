@@ -34,7 +34,9 @@ class ResponseValidator:
             if re.search(pattern, normalized_answer, flags=re.IGNORECASE):
                 issues.append(f"Prohibited pattern found: {pattern}")
 
-        if len(answer) > 100 and not cited_numbers:
+        category = response.get("category")
+        exit_type = response.get("exit_type")
+        if len(answer) > 100 and not cited_numbers and category not in ("faq", "out_of_scope") and exit_type != "insufficient_evidence":
             issues.append("Answer contains medical claims but no citations")
 
         language = response.get("language", "vi")

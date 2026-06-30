@@ -83,6 +83,8 @@ Chỉ trả lời đúng 1 chữ: YES hoặc NO.
 """
         try:
             response = self.llm.generate_answer(query, system_prompt=prompt, max_new_tokens=512)
+            if "Lỗi" in response or "Exception" in response:
+                return True  # Fallback to emergency warning if LLM fails
             return "YES" in response.upper()
         except Exception:
             return True
