@@ -3,40 +3,30 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from src.utils import load_json, normalize_for_match
+from src.utils import normalize_for_match
 
-
-EMERGENCY_PATTERNS = [
-    r"\bdau nguc\b",
-    r"\bkho tho\b",
-    r"\bkhong tho duoc\b",
-    r"\bdot quy\b",
-    r"\bnhoi mau\b",
-    r"\btu tu\b",
-    r"\bmuon chet\b",
-    r"\btu gay thuong tich\b",
-    r"\bchay mau nhieu\b",
-    r"\bchay mau khong ngung\b",
-    r"\bbat tinh\b",
-    r"\bco giat\b",
-    r"\bdi ung\b.*\bsung\b",
-    r"\bsoc phan ve\b",
-    r"\bhon me\b",
+EMERGENCY_TRIGGERS = [
+    r"dau nguc", r"kho tho", r"dot quy", r"nhoi mau", r"tu tu", 
+    r"chay mau", r"bat tinh", r"co giat", r"soc phan ve", r"hon me", 
+    r"qua lieu", r"ngo doc", r"ngat xiu"
 ]
 
 EMERGENCY_RESPONSE = (
-    "**CANH BAO KHAN CAP**\n\n"
-    "Trieu chung ban mo ta co the la tinh huong cap cuu y te.\n\n"
-    "Hay goi cap cuu 115 hoac den co so y te gan nhat ngay lap tuc. "
-    "Neu dang o My, hay goi 911.\n\n"
-    "Toi khong the thay the bac si trong tinh huong khan cap. "
-    "Vui long tim tro giup y te truc tiep ngay."
+    "**⚠️ CẢNH BÁO CẤP CỨU ⚠️**\n\n"
+    "Triệu chứng bạn mô tả có thể là tình huống cấp cứu y tế.\n\n"
+    "**👉 Hãy gọi cấp cứu ngay:**\n\n"
+    "- 🚑 **Cấp cứu toàn quốc: 115**\n"
+    "- 🏥 BV Bạch Mai (Hà Nội): 024 3869 3731\n"
+    "- 🏥 BV Chợ Rẫy (TP.HCM): 028 3855 4137\n"
+    "- 🏥 BV Tâm Anh (HN): 024 3872 3872\n"
+    "- 🏥 BV Tâm Anh (HCM): 028 7102 6789\n"
+    "- 🏥 BV Vinmec (HN): 024 3974 3556\n\n"
+    "⚕️ Vui lòng tìm trợ giúp y tế trực tiếp ngay."
 )
 
 OUT_OF_SCOPE_RESPONSE = (
-    "Cau hoi nay nam ngoai pham vi kien thuc y te cua tro ly.\n\n"
-    "Toi co the ho tro ve thuoc, tac dung phu, tuong tac thuoc, "
-    "thong tin benh ly, thai ky, nhi khoa va nguoi cao tuoi."
+    "Xin lỗi, tôi là trợ lý y tế. Câu hỏi này nằm ngoài phạm vi kiến thức của tôi. "
+    "Bạn có thể hỏi tôi về triệu chứng bệnh, thông tin thuốc hoặc điều trị."
 )
 
 INSUFFICIENT_EVIDENCE_RESPONSE = (
@@ -61,7 +51,6 @@ DISCLAIMERS = {
     ),
 }
 
-
 def get_disclaimer(risk_level: str) -> str:
     return DISCLAIMERS.get(risk_level, DISCLAIMERS["medium"])
 
@@ -69,16 +58,34 @@ def get_disclaimer(risk_level: str) -> str:
 class SafetyGuard:
     """Safety checks that run before and after retrieval."""
 
-    def __init__(self, categories_path: str):
-        self.categories = load_json(categories_path)["categories"]
-        self.emergency_patterns = [re.compile(pattern) for pattern in EMERGENCY_PATTERNS]
+    def __init__(self, llm_client=None):
+        self.triggers = [re.compile(rf"\b{p}\b", re.IGNORECASE) for p in EMERGENCY_TRIGGERS]
+        self.llm = llm_client
 
     def is_emergency(self, query: str) -> bool:
-        query_normalized = normalize_for_match(query)
-        for pattern in self.emergency_patterns:
-            if pattern.search(query_normalized):
-                return True
-        return False
+        q_norm = normalize_for_match(query)
+        
+        # 1. Lọc thô bằng Regex
+        if not any(t.search(q_norm) for t in self.triggers):
+            return False
+            
+        # 2. Nếu không có LLM client -> mặc định return True (fall back to old behavior if needed)
+        if not self.llm:
+            return True
+            
+        # 3. LLM verify (Zero-shot)
+        prompt = """
+Bạn là chuyên gia y tế. Đọc câu hỏi của người dùng và xác định xem đây có phải là TÌNH HUỐNG CẤP CỨU Y TẾ KHẨN CẤP hay không.
+- Nếu người dùng đang kể triệu chứng nguy hiểm xảy ra với họ/người thân -> Trả lời YES.
+- Nếu họ chỉ hỏi kiến thức chung chung (dấu hiệu nhận biết, nguyên nhân, cách phòng) -> Trả lời NO.
+
+Chỉ trả lời đúng 1 chữ: YES hoặc NO.
+"""
+        try:
+            response = self.llm.generate_answer(query, system_prompt=prompt, max_new_tokens=512)
+            return "YES" in response.upper()
+        except Exception:
+            return True
 
     def emergency_response(self, query: str) -> dict[str, Any]:
         return {
@@ -88,33 +95,6 @@ class SafetyGuard:
             "requires_human": True,
             "language": "vi",
         }
-
-    def is_medical_scope(self, query: str) -> tuple[bool, float]:
-        query_normalized = normalize_for_match(query)
-        max_score = 0.0
-        for category in self.categories:
-            keywords = category.get("keywords_vi", [])
-            if not keywords:
-                continue
-            matches = sum(
-                1 for keyword in keywords if normalize_for_match(keyword) in query_normalized
-            )
-            score = matches / max(len(keywords), 1)
-            max_score = max(max_score, score)
-        return max_score >= 0.05, max_score
-
-    def best_category(self, query: str) -> dict[str, Any] | None:
-        query_normalized = normalize_for_match(query)
-        best: tuple[float, dict[str, Any] | None] = (0.0, None)
-        for category in self.categories:
-            keywords = category.get("keywords_vi", [])
-            matches = sum(
-                1 for keyword in keywords if normalize_for_match(keyword) in query_normalized
-            )
-            score = matches / max(len(keywords), 1)
-            if score > best[0]:
-                best = (score, category)
-        return best[1]
 
     def out_of_scope_response(self, query: str) -> dict[str, Any]:
         return {

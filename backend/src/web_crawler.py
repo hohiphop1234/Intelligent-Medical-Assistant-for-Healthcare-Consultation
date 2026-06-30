@@ -19,8 +19,7 @@ class WebCrawler:
     """On-demand crawler limited to trusted medical domains."""
 
     SEARCH_URLS = [
-        "https://vsearch.nlm.nih.gov/vivisimo/cgi-bin/query-meta?v:project=medlineplus&v:sources=medlineplus-bundle&query={query}",
-        "https://dailymed.nlm.nih.gov/dailymed/search.cfm?query={query}",
+        "https://html.duckduckgo.com/html/?q={query}+site:tamanhhospital.vn+OR+site:vinmec.com+OR+site:hellobacsi.com+OR+site:moh.gov.vn",
     ]
 
     def __init__(self):
@@ -48,7 +47,14 @@ class WebCrawler:
                 continue
             soup = BeautifulSoup(html, "html.parser")
             for anchor in soup.find_all("a", href=True):
-                href = urljoin(search_url, anchor["href"])
+                href = anchor["href"]
+                if "uddg=" in href:
+                    from urllib.parse import parse_qs, unquote
+                    parsed = urlparse(href)
+                    qs = parse_qs(parsed.query)
+                    if "uddg" in qs:
+                        href = unquote(qs["uddg"][0])
+                href = urljoin(search_url, href)
                 if self._allowed(href) and not self._is_search_result_url(href) and href not in links:
                     links.append(href)
         return links

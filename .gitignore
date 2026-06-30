@@ -48,3 +48,5 @@ data/
 # Prevent tracking large local database and GGUF models
 models/chromadb/
 models/*.gguf
+
+backend.rar

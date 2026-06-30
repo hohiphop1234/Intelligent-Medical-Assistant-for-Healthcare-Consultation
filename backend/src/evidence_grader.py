@@ -7,7 +7,6 @@ from config import (
     EVIDENCE_THRESHOLD,
     MIN_EVIDENCE_CHUNKS,
 )
-from src.topic_relevance import pregnancy_hard_reject, pregnancy_relevance_bonus
 from src.utils import normalize_for_match, tokenize
 @dataclass
 class GradingResult:
@@ -57,10 +56,6 @@ class EvidenceGrader:
 
     def _score_single(self, question: str, chunk: dict[str, Any]) -> float:
         if self._entity_mismatch(question, chunk):
-            return 0.0
-        if pregnancy_hard_reject(
-            question, chunk.get("content", ""), chunk.get("metadata", {})
-        ):
             return 0.0
         rule_score = self._grade_single_rules(question, chunk)
         return rule_score
@@ -117,7 +112,7 @@ class EvidenceGrader:
             return min(0.2, overlap * 0.4)
 
         entity_bonus = 0.3 if entity_matches_query or content_has_query_entity else 0.0
-        topic_bonus = pregnancy_relevance_bonus(question, chunk.get("content", ""), metadata)
+        topic_bonus = 0.0
         search_bonus = min(max(search_score, 0.0), 1.0) * 0.2
         return min(1.0, overlap * 0.7 + entity_bonus + topic_bonus + search_bonus)
 

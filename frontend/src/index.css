@@ -71,7 +71,33 @@ body {
   font-size: 0.85rem;
   color: var(--text-muted);
   display: flex;
+  align-items: center;
   gap: 15px;
+}
+
+.sos-btn {
+  background: transparent;
+  border: 1px solid #ef4444;
+  color: #ef4444;
+  padding: 4px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sos-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.sos-btn.active {
+  background: #ef4444;
+  color: white;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
 }
 
 /* Chat Area */

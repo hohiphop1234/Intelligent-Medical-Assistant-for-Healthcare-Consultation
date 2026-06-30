@@ -59,7 +59,7 @@ function App() {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ message: userMsg })
+        body: JSON.stringify({ message: userMsg, is_emergency: isEmergency })
       });
 
       if (!response.ok) {
@@ -159,6 +159,8 @@ function App() {
     }
   };
 
+  const [isEmergency, setIsEmergency] = useState(false);
+
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -171,6 +173,13 @@ function App() {
       <header className="header">
         <h1><Activity size={28} /> Health AI Assistant</h1>
         <div className="stats">
+          <button 
+            className={`sos-btn ${isEmergency ? 'active' : ''}`}
+            onClick={() => setIsEmergency(!isEmergency)}
+            title="Bật/Tắt chế độ cấp cứu"
+          >
+            🚨 SOS
+          </button>
           {stats ? (
             <span>📚 {stats.vi_count} tài liệu | RAG + GGUF Engine</span>
           ) : (

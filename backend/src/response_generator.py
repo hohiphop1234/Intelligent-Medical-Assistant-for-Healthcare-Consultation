@@ -8,13 +8,6 @@ from config import (
     LLM_TEMPERATURE,
 )
 from src.query_router import QueryClassification
-from src.topic_relevance import (
-    asks_drug_avoidance,
-    has_pregnancy_context,
-    has_pregnancy_risk_or_avoidance,
-    is_lactation_query,
-    is_pregnancy_query,
-)
 from src.utils import normalize_for_match, tokenize
 
 from src.qwen_llm import QwenMedicalLLM
@@ -538,11 +531,6 @@ class ResponseGenerator:
             term for term in tokenize(question) if term not in stopwords
         }
         normalized_question = normalize_for_match(question)
-        asks_pregnancy = is_pregnancy_query(question) and not is_lactation_query(question)
-        asks_pregnancy_avoidance = (
-            asks_pregnancy
-            and asks_drug_avoidance(question)
-        )
         asks_side_effects = any(
             phrase in normalized_question
             for phrase in [
@@ -603,31 +591,8 @@ class ResponseGenerator:
         best_sentence = ""
         best_score = -1
         for sentence in sentences[:40]:
-            if asks_pregnancy_avoidance and not has_pregnancy_risk_or_avoidance(
-                sentence
-            ):
-                continue
-            if (
-                asks_pregnancy
-                and not asks_pregnancy_avoidance
-                and not has_pregnancy_context(sentence)
-            ):
-                continue
             terms = set(tokenize(sentence))
             score = len(query_terms & terms) * 2
-            if asks_pregnancy and has_pregnancy_context(sentence):
-                score += 8
-            if asks_pregnancy_avoidance:
-                normalized_sentence = normalize_for_match(sentence)
-                if "thai nhi" in normalized_sentence or "fetus" in normalized_sentence:
-                    score += 10
-                if "tuan thu 20" in normalized_sentence or "20 weeks" in normalized_sentence:
-                    score += 8
-                if (
-                    "tranh thai" in normalized_sentence
-                    or "birth control" in normalized_sentence
-                ):
-                    score -= 8
             if asks_side_effects:
                 symptom_hits = len(side_effect_terms & terms)
                 normalized_sentence = normalize_for_match(sentence)

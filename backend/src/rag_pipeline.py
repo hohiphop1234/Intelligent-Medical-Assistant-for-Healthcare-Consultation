@@ -20,7 +20,6 @@ from src.query_router import QueryRouter
 from src.response_generator import ResponseGenerator
 from src.response_validator import ResponseValidator
 from src.safety_guard import SafetyGuard
-from src.topic_relevance import asks_drug_avoidance, should_route_pregnancy_to_drug_safety
 from src.utils import ensure_dir, load_jsonl
 from src.vector_store import VectorStore
 from src.web_crawler import WebCrawler
@@ -40,9 +39,10 @@ FILTERABLE_CATEGORIES = {
 class MedicalRAGPipeline:
     """End-to-end medical RAG flow."""
 
-    def __init__(self):
-        self.safety_guard = SafetyGuard(CATEGORIES_PATH)
-        self.query_router = QueryRouter(CATEGORIES_PATH)
+    def __init__(self, llm_client=None):
+        self.llm_client = llm_client
+        self.safety_guard = SafetyGuard(llm_client=self.llm_client)
+        self.query_router = QueryRouter(llm_client=self.llm_client)
         self.embedding_manager = EmbeddingManager()
         self.vector_store = VectorStore(CHROMA_PERSIST_DIR)
         self.bm25_store = BM25Store()
@@ -96,12 +96,17 @@ class MedicalRAGPipeline:
         response["relevant_count"] = len(graded.relevant_chunks)
         return self.response_validator.validate(response, graded.relevant_chunks)
 
-    def stream_query(self, question: str):
-        if self.safety_guard.is_emergency(question):
+    def stream_query(self, question: str, is_emergency: bool = False):
+        if is_emergency or self.safety_guard.is_emergency(question):
             yield {"type": "metadata", "data": {"type": "emergency", "message": self.safety_guard.emergency_response(question)["message"]}}
             return
 
         classification = self.query_router.classify(question)
+        if classification.category == "faq":
+            yield {"type": "metadata", "data": {"type": "message", "sources": [], "category": "faq", "risk_level": "low", "route": "general_qa"}}
+            for token in self.llm_client.stream(question):
+                yield {"type": "token", "content": token}
+            return
         if classification.category == "out_of_scope":
             yield {"type": "metadata", "data": {"type": "out_of_scope", "message": self.safety_guard.out_of_scope_response(question)["message"]}}
             return
@@ -159,13 +164,6 @@ class MedicalRAGPipeline:
     def _retrieval_top_k(self, question: str, classification) -> int:
         if classification.category == "drug_interaction":
             return TOP_K * 3 + 2
-        if (
-            classification.category == "pregnancy"
-            and should_route_pregnancy_to_drug_safety(question)
-            and asks_drug_avoidance(question)
-            and not classification.entities
-        ):
-            return TOP_K * 4 + 2
         return TOP_K + 2
 
     def ingest_data(self) -> dict[str, int]:

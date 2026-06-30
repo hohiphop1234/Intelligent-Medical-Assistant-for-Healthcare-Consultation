@@ -64,11 +64,11 @@ EMERGENCY_RESPONSE_ONLY = os.getenv("EMERGENCY_RESPONSE_ONLY", "true").lower() =
 
 # Crawl
 CRAWL_WHITELIST = [
-    "medlineplus.gov",
-    "dailymed.nlm.nih.gov",
-    "fda.gov",
-    "who.int",
-    "cdc.gov",
+    "tamanhhospital.vn",
+    "vinmec.com",
+    "hellobacsi.com",
+    "moh.gov.vn",
+    "vncdc.gov.vn",
 ]
 CRAWL_CACHE_DIR = str(BASE_DIR / "data" / "crawl_cache")
 CRAWL_RATE_LIMIT = float(os.getenv("CRAWL_RATE_LIMIT", "2"))

@@ -17,7 +17,7 @@ class QwenMedicalLLM:
 
     def __init__(self):
         self.ollama_url = "http://localhost:11434/api/chat"
-        self.model_name = "qwen_medical" # Tên mô hình đã được import vào Ollama
+        self.model_name = "qwen-medical" # Tên mô hình đã được import vào Ollama
         
         # Kiểm tra trạng thái Ollama
         try:
@@ -91,8 +91,9 @@ class QwenMedicalLLM:
         except requests.exceptions.ConnectionError:
             return "Lỗi: Không thể kết nối tới Ollama. Vui lòng đảm bảo Ollama đang chạy trên máy tính của bạn."
         except Exception as e:
-            print(f"Lỗi gọi Ollama: {e}")
-            return f"Lỗi: {str(e)}"
+            import traceback
+            traceback.print_exc()
+            return f"Exception: {e}"
             
     def stream_answer(self, question: str, system_prompt: str = "", max_new_tokens: int = 2048):
         messages = []

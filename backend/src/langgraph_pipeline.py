@@ -4,7 +4,7 @@ from langgraph.graph import StateGraph, END
 from config import CONFIDENCE_THRESHOLD
 from src.rag_pipeline import MedicalRAGPipeline, FILTERABLE_CATEGORIES
 from src.qwen_llm import QwenMedicalLLM
-from src.topic_relevance import asks_drug_avoidance, should_route_pregnancy_to_drug_safety
+
 
 
 # =====================================================================
@@ -46,14 +46,14 @@ class LangGraphPipeline:
     """
     
     def __init__(self):
+        # Nhánh LLM General QA
+        self.llm = QwenMedicalLLM()
+        
         # Tái sử dụng các thành phần từ RAG Pipeline hiện tại
-        self.rag_pipeline = MedicalRAGPipeline()
+        self.rag_pipeline = MedicalRAGPipeline(llm_client=self.llm)
         self.safety_guard = self.rag_pipeline.safety_guard
         self.query_router = self.rag_pipeline.query_router
         self.embedding_manager = self.rag_pipeline.embedding_manager
-        
-        # Nhánh LLM General QA
-        self.llm = QwenMedicalLLM()
         
         # Khởi tạo đồ thị
         self.graph = self._build_graph()
@@ -144,16 +144,10 @@ class LangGraphPipeline:
                 "answer": insuf_resp["message"]
             }
             
-        # Quyết định route: Các danh mục liên quan tới bệnh án, rủi ro cao -> RAG. Cơ bản -> LLM QA.
-        rag_categories = {
-            "safety", "interactions", "contraindications", "contraindication",
-            "pregnancy", "overdose", "pediatric", "patient_query", "case_based", "edge_case"
-        }
-        
-        if classification.risk_level in ["high", "critical"] or classification.category in rag_categories:
-            route = "rag"
-        else:
+        if classification.category == "faq":
             route = "general_qa"
+        else:
+            route = "rag"
             
         return {
             **state,
@@ -221,8 +215,12 @@ class LangGraphPipeline:
     # 5. Hàm thực thi chính
     # =====================================================================
     
-    def process_query(self, question: str) -> dict:
+    def process_query(self, question: str, is_emergency: bool = False) -> dict:
         """Entrypoint cho toàn bộ đồ thị"""
+        if is_emergency:
+            emergency_resp = self.safety_guard.emergency_response(question)
+            return {"type": "emergency", "message": emergency_resp["message"]}
+            
         initial_state = {
             "question": question,
             "category": None,

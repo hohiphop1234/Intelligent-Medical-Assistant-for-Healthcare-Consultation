@@ -3,29 +3,6 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-from config import (
-    CATEGORIES_PATH,
-    LLM_MAX_TOKENS,
-)
-from src.safety_guard import SafetyGuard
-from src.utils import extract_drug_entities, normalize_for_match, safe_json_loads
-
-
-KNOWN_DRUGS = [
-    "warfarin",
-    "ibuprofen",
-    "acetaminophen",
-    "paracetamol",
-    "metformin",
-    "insulin",
-    "aspirin",
-    "omeprazole",
-    "famotidine",
-    "panadol",
-    "tylenol",
-]
-
-
 @dataclass
 class QueryClassification:
     intent: str
@@ -35,127 +12,56 @@ class QueryClassification:
     confidence: float
     requires_rag: bool
 
-
 class QueryRouter:
-    """Classify medical queries before retrieval."""
+    """Classify medical queries before retrieval using LLM."""
 
-    def __init__(self, categories_path: str = CATEGORIES_PATH):
-        self.safety_guard = SafetyGuard(categories_path)
+    def __init__(self, llm_client=None):
+        self.llm = llm_client
 
     def classify(self, query: str) -> QueryClassification:
-        return self._classify_with_rules(query)
-
-    def _classify_with_rules(self, query: str) -> QueryClassification:
-        q = normalize_for_match(query)
-        entities = self._extract_entities(q)
-
-        category = "disease_knowledge"
-        intent = "general_qa"
-        risk = "low"
-        confidence = 0.35
-        requires_rag = True
-
-        scoped, scope_score = self.safety_guard.is_medical_scope(query)
-        has_known_drug = bool(entities)
-
-        if any(term in q for term in ["xin chao", "hello", "hi", "hey", "chao ban", "chao ai"]) and len(q.split()) <= 5:
+        if not self.llm:
             return QueryClassification(
-                intent="general_qa",
-                category="general_qa",
+                intent="drug_query",
+                category="drug_query",
                 entities=[],
-                risk_level="low",
-                confidence=1.0,
-                requires_rag=False
+                risk_level="high",
+                confidence=0.9,
+                requires_rag=True
             )
 
-        if any(term in q for term in ["qua lieu", "overdose", "poison", "ngo doc", "too many"]):
-            category, intent, risk, confidence = (
-                "overdose_triage",
-                "emergency_or_overdose",
-                "critical",
-                0.92,
-            )
-        elif len(entities) >= 2 and any(term in q.split() for term in ["with", "voi", "chung"]):
-            category, intent, risk, confidence = (
-                "drug_interaction",
-                "interaction_check",
-                "critical",
-                0.88,
-            )
-        elif any(
-            term in q
-            for term in ["tuong tac", "interaction", "interact", "dung chung", "take with", "ket hop"]
-        ):
-            category, intent, risk, confidence = (
-                "drug_interaction",
-                "interaction_check",
-                "critical",
-                0.9,
-            )
-        elif any(term in q for term in ["mang thai", "thai ky", "pregnant", "pregnancy", "breastfeeding", "cho con bu", "co thai", "ba bau"]):
-            category, intent, risk, confidence = (
-                "pregnancy",
-                "special_population",
-                "critical",
-                0.86,
-            )
-        elif any(term in q for term in ["tre em", "em be", "child", "children", "baby", "pediatric"]):
-            category, intent, risk, confidence = (
-                "pediatric",
-                "special_population",
-                "critical",
-                0.84,
-            )
-        elif any(term in q for term in ["nguoi gia", "cao tuoi", "elderly", "geriatric", "senior"]):
-            category, intent, risk, confidence = (
-                "elderly",
-                "special_population",
-                "high",
-                0.82,
-            )
-        elif has_known_drug or any(
-            term in q
-            for term in ["thuoc", "drug", "medication", "side effect", "tac dung phu", "dose", "lieu", "benh", "trieu chung", "dau", "cam", "ho", "sot", "dieu tri", "chua", "kham", "xu ly", "xu li"]
-        ):
-            category, intent, risk, confidence = (
-                "drug_safety",
-                "drug_info",
-                "high",
-                0.82 if has_known_drug else 0.7,
-            )
-        elif scoped:
-            best_category = self.safety_guard.best_category(query)
-            category = (best_category or {}).get("id", "disease_knowledge")
-            risk = (best_category or {}).get("risk_level", "medium")
-            intent = "health_information"
-            confidence = max(0.55, min(0.85, scope_score * 5))
+        prompt = """
+Bạn là hệ thống định tuyến (router) cho một trợ lý y tế AI.
+Hãy phân loại câu hỏi sau thành ĐÚNG MỘT TRONG BA nhóm:
+1. "faq": Các câu hỏi chào hỏi (hello, xin chào), khả năng của bạn (bạn làm được gì, bạn là ai), hoặc lời cảm ơn.
+2. "drug_query": Tất cả các câu hỏi liên quan đến sức khỏe, triệu chứng bệnh, điều trị, thông tin thuốc, y tế.
+3. "out_of_scope": Các câu hỏi ngoài luồng, KHÔNG liên quan đến y tế hoặc trợ lý y tế (ví dụ: viết code, nấu ăn, thời tiết, điện thoại nào tốt).
 
-        if category != "out_of_scope":
-            requires_rag = True
+Trả về kết quả dưới định dạng JSON hợp lệ với 1 key duy nhất là "category".
+Ví dụ: {"category": "faq"} hoặc {"category": "drug_query"} hoặc {"category": "out_of_scope"}
+"""
+        try:
+            # Tùy thuộc vào LLM client, parse JSON
+            response = self.llm.generate_answer(query, system_prompt=prompt, max_new_tokens=512)
+            # Find the JSON part in the response
+            start_idx = response.find("{")
+            end_idx = response.rfind("}")
+            if start_idx != -1 and end_idx != -1:
+                json_str = response[start_idx:end_idx+1]
+                data = json.loads(json_str)
+                category = data.get("category", "drug_query").lower()
+            else:
+                category = "drug_query"
+                
+            if category not in ["faq", "out_of_scope"]:
+                category = "drug_query"
+        except Exception:
+            category = "drug_query"
 
         return QueryClassification(
-            intent=intent,
+            intent=category,
             category=category,
-            entities=entities,
-            risk_level=risk if risk != "none" else "low",
-            confidence=confidence,
-            requires_rag=requires_rag,
-        )
-
-    def _extract_entities(self, normalized_query: str) -> list[str]:
-        return extract_drug_entities(normalized_query, KNOWN_DRUGS)
-
-    def _coerce_classification(
-        self, data: dict
-    ) -> QueryClassification:
-        category = str(data.get("category") or "out_of_scope")
-        if category == "general_health":
-            category = "disease_knowledge"
-        return QueryClassification(
-            intent=str(data.get("intent") or category),
-            category=category,
-            entities=[str(item).lower() for item in data.get("entities", [])],
-            risk_level=str(data.get("risk_level") or "medium"),
-            confidence=float(data.get("confidence") or 0.0),
-            requires_rag=bool(data.get("requires_rag", category != "out_of_scope")),
+            entities=[],
+            risk_level="high" if category == "drug_query" else "low",
+            confidence=0.9,
+            requires_rag=(category == "drug_query")
         )
