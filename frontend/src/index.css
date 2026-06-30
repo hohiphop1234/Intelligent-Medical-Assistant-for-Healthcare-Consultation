@@ -142,6 +142,8 @@ body {
   border-radius: 18px;
   line-height: 1.6;
   font-size: 0.95rem;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .message.user .msg-content {
@@ -316,6 +318,41 @@ button:disabled {
   font-weight: 600;
 }
 
+.message.bot .msg-content pre {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 10px 14px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 10px 0;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.message.bot .msg-content code {
+  font-family: 'Fira Code', Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--primary);
+}
+
+/* Citations */
+.citation-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(56, 189, 248, 0.2);
+  color: var(--primary);
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0 4px;
+  height: 16px;
+  border-radius: 8px;
+  margin-left: 4px;
+  vertical-align: super;
+  border: 1px solid rgba(56, 189, 248, 0.5);
+  user-select: none;
+}
+
 /* Animations */
 @keyframes fadeIn {
   to {
@@ -327,4 +364,80 @@ button:disabled {
 @keyframes bounce {
   0%, 80%, 100% { transform: scale(0); }
   40% { transform: scale(1); }
+}
+
+/* Reference Sources Collapsible UI */
+.sources-container {
+  margin-top: 12px;
+  width: 100%;
+}
+
+.sources-details {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.sources-details[open] {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sources-summary {
+  padding: 10px 15px;
+  font-size: 0.85rem;
+  color: var(--primary);
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: color 0.2s;
+}
+
+.sources-summary:hover {
+  color: var(--primary-hover);
+}
+
+.sources-list {
+  padding: 10px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid var(--border-color);
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.sources-list::-webkit-scrollbar {
+  width: 4px;
+}
+.sources-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+.source-card {
+  padding: 10px;
+  background: rgba(15, 23, 42, 0.3);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.source-title {
+  font-size: 0.85rem;
+  color: var(--text-main);
+  margin-bottom: 6px;
+  border-left: 3px solid var(--primary);
+  padding-left: 8px;
+}
+
+.source-content {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  white-space: pre-wrap;
 }

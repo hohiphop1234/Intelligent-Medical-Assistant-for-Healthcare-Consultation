@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
+import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import { Send, Activity, Stethoscope, AlertTriangle } from 'lucide-react';
 import './index.css';
 
@@ -168,6 +171,19 @@ function App() {
     }
   };
 
+  const formatMarkdown = (text) => {
+    if (!text) return '';
+    // Normalize newlines to ensure ReactMarkdown renders them as breaks
+    let formatted = text
+      .replace(/\r?\n/g, '\n')
+      .replace(/\n/g, '\n\n')
+      .replace(/\n{3,}/g, '\n\n');
+      
+    // Format citation references [1], [2] to beautiful badges
+    formatted = formatted.replace(/\[(\d+)\]/g, '<span class="citation-badge">[$1]</span>');
+    return formatted;
+  };
+
   return (
     <div className="app-container">
       <header className="header">
@@ -193,11 +209,30 @@ function App() {
           <div key={msg.id} className={`message ${msg.role}`}>
             <div className="msg-content">
               {msg.role === 'bot' ? (
-                <ReactMarkdown>
-                  {msg.content
-                    .replace(/<think>/g, '> **[AI đang suy luận...]**\\n\\n```text\\n')
-                    .replace(/<\/think>/g, '\\n```\\n\\n**[Câu trả lời]**\\n\\n')
-                  }
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[
+                    rehypeRaw,
+                    [rehypeSanitize, {
+                      ...defaultSchema,
+                      attributes: {
+                        ...defaultSchema.attributes,
+                        span: [...(defaultSchema.attributes.span || []), 'className', 'class']
+                      }
+                    }]
+                  ]}
+                >
+                  {(() => {
+                    let content = formatMarkdown(msg.content);
+                    const openCount = (content.match(/<think>/g) || []).length;
+                    const closeCount = (content.match(/<\/think>/g) || []).length;
+                    if (openCount > closeCount) {
+                      content += '\n</think>';
+                    }
+                    return content
+                      .replace(/<think>/g, '> **[AI đang suy luận...]**\n\n```text\n')
+                      .replace(/<\/think>/g, '\n```\n\n**[Câu trả lời]**\n\n');
+                  })()}
                 </ReactMarkdown>
               ) : (
                 msg.content
@@ -219,8 +254,22 @@ function App() {
             )}
             
             {msg.role === 'bot' && msg.metadata && msg.metadata.sources && msg.metadata.sources.length > 0 && (
-              <div className="metadata" style={{marginTop: '4px', color: '#38bdf8'}}>
-                <span>Nguồn tham khảo: {msg.metadata.sources.map(s => `[${s.index}]`).join(', ')}</span>
+              <div className="sources-container">
+                <details className="sources-details">
+                  <summary className="sources-summary">
+                    🔍 Xem {msg.metadata.sources.length} tài liệu đối chiếu y khoa
+                  </summary>
+                  <div className="sources-list">
+                    {msg.metadata.sources.map((src) => (
+                      <div key={src.index} className="source-card">
+                        <div className="source-title">
+                          <strong>[{src.index}] {src.title}</strong>
+                        </div>
+                        <p className="source-content">{src.content}</p>
+                      </div>
+                    ))}
+                  </div>
+                </details>
               </div>
             )}
           </div>
