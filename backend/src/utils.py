@@ -53,6 +53,7 @@ def stable_hash(text: str, length: int = 16) -> str:
 
 
 def strip_accents(text: str) -> str:
+    text = text.replace('đ', 'd').replace('Đ', 'D')
     normalized = unicodedata.normalize("NFD", text)
     return "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
 
