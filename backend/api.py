@@ -5,19 +5,10 @@ from typing import Optional, List, Dict, Any
 import uvicorn
 import logging
 
+from contextlib import asynccontextmanager
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-app = FastAPI(title="Medical Assistant API")
-
-# Setup CORS cho ReactJS frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 pipeline = None
 
@@ -28,11 +19,28 @@ def get_pipeline():
         pipeline = LangGraphPipeline()
     return pipeline
 
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    from src.llama_manager import LlamaServerManager
+    logger.info("Starting llama-server background process...")
+    LlamaServerManager().start(model_path="models/qwen3-4b-thinking.gguf", port=8080)
     logger.info("Preloading pipeline on startup...")
     get_pipeline()
     logger.info("Pipeline preloaded successfully.")
+    yield
+    logger.info("Shutting down llama-server...")
+    LlamaServerManager().stop()
+
+app = FastAPI(title="Medical Assistant API", lifespan=lifespan)
+
+# Setup CORS cho ReactJS frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class ChatRequest(BaseModel):
     message: str
@@ -97,8 +105,8 @@ async def chat_stream_endpoint(request: ChatRequest):
     
     async def event_generator():
         try:
-            # Bypass langgraph for streaming, use rag_pipeline directly
-            for item in pipeline.rag_pipeline.stream_query(request.message, is_emergency=request.is_emergency):
+            # Use LangGraph pipeline for streaming
+            for item in pipeline.stream_query(request.message):
                 yield f"data: {json.dumps(item, ensure_ascii=False)}\n\n"
         except Exception as e:
             logger.error(f"Error in stream: {e}")

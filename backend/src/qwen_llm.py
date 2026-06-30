@@ -4,8 +4,8 @@ import os
 
 class QwenMedicalLLM:
     """
-    Class quản lý và gọi mô hình Qwen3-4B thông qua Ollama local.
-    Mục đích: Cung cấp nhánh General QA và RAG chạy siêu tốc cục bộ thông qua API của Ollama.
+    Class quản lý và gọi mô hình Qwen3-4B thông qua llama-server.
+    Mục đích: Cung cấp nhánh General QA và RAG chạy siêu tốc cục bộ thông qua API tương thích OpenAI của llama-server.
     """
     _instance = None
 
@@ -16,23 +16,23 @@ class QwenMedicalLLM:
         return cls._instance
 
     def __init__(self):
-        self.ollama_url = "http://localhost:11434/api/chat"
-        self.model_name = "qwen-medical" # Tên mô hình đã được import vào Ollama
+        self.llama_url = "http://localhost:8080/v1/chat/completions"
+        self.model_name = "qwen3-4b-thinking" # Có thể bất kỳ tên nào vì llama-server dùng model đã nạp sẵn
         
-        # Kiểm tra trạng thái Ollama
+        # Kiểm tra trạng thái llama-server
         try:
-            res = requests.get("http://localhost:11434/")
+            res = requests.get("http://localhost:8080/health", timeout=2)
             self._is_loaded = res.status_code == 200
         except Exception:
             self._is_loaded = False
 
     def load_model(self):
-        # Không cần load thủ công, Ollama tự động quản lý vào RAM/VRAM
+        # Không cần load thủ công, llama-server tự quản lý
         pass
 
     def generate_answer(self, question: str, max_new_tokens: int = 1024, system_prompt: str = None) -> str:
         """
-        Sinh câu trả lời dựa trên câu hỏi đầu vào thông qua Ollama API.
+        Sinh câu trả lời dựa trên câu hỏi đầu vào thông qua llama-server API.
         """
         if system_prompt is None:
             system_prompt = "You are a medical question answering assistant. Answer clearly, cautiously, and remind users to consult healthcare professionals for personal medical decisions."
@@ -46,26 +46,19 @@ class QwenMedicalLLM:
             "model": self.model_name,
             "messages": messages,
             "stream": False,
-            "options": {
-                "num_predict": max_new_tokens,
-                "num_ctx": 8192,
-                "temperature": 0.15,
-                "top_p": 0.9,
-                "repeat_penalty": 1.15,
-                "num_batch": 512,
-                "num_gpu": 99
-            }
+            "max_tokens": max_new_tokens,
+            "temperature": 0.15,
+            "top_p": 0.9,
+            "frequency_penalty": 1.15
         }
         
         try:
-            response = requests.post(self.ollama_url, json=payload, timeout=600)
+            response = requests.post(self.llama_url, json=payload, timeout=600)
             if response.status_code != 200:
-                if response.status_code == 404:
-                    return "Lỗi: Không tìm thấy mô hình 'qwen_medical' trong Ollama. Vui lòng cài đặt và import mô hình bằng Modelfile."
-                return f"Lỗi gọi Ollama API: {response.text}"
+                return f"Lỗi gọi llama-server API: {response.text}"
                 
             data = response.json()
-            answer = data.get("message", {}).get("content", "")
+            answer = data.get("choices", [{}])[0].get("message", {}).get("content", "")
             
             # Xử lý dọn dẹp các luồng suy nghĩ <think> nếu mô hình sinh ra
             if "</think>" in answer:
@@ -89,7 +82,7 @@ class QwenMedicalLLM:
             return answer
             
         except requests.exceptions.ConnectionError:
-            return "Lỗi: Không thể kết nối tới Ollama. Vui lòng đảm bảo Ollama đang chạy trên máy tính của bạn."
+            return "Lỗi: Không thể kết nối tới llama-server. Vui lòng đảm bảo llama-server đang chạy."
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -105,29 +98,32 @@ class QwenMedicalLLM:
             "model": self.model_name,
             "messages": messages,
             "stream": True,
-            "options": {
-                "num_predict": max_new_tokens,
-                "num_ctx": 8192,
-                "temperature": 0.15,
-                "top_p": 0.9,
-                "repeat_penalty": 1.15,
-                "num_batch": 512,
-                "num_gpu": 99
-            }
+            "max_tokens": max_new_tokens,
+            "temperature": 0.15,
+            "top_p": 0.9,
+            "frequency_penalty": 1.15
         }
         
         import json
         try:
-            response = requests.post(self.ollama_url, json=payload, stream=True, timeout=600)
+            response = requests.post(self.llama_url, json=payload, stream=True, timeout=600)
             if response.status_code != 200:
-                yield f"Lỗi gọi Ollama API: {response.text}"
+                yield f"Lỗi gọi llama-server API: {response.text}"
                 return
                 
             for line in response.iter_lines():
                 if line:
-                    data = json.loads(line.decode('utf-8'))
-                    chunk = data.get("message", {}).get("content", "")
-                    if chunk:
-                        yield chunk
+                    line = line.decode('utf-8')
+                    if line.startswith("data: "):
+                        json_str = line[6:]
+                        if json_str.strip() == "[DONE]":
+                            break
+                        try:
+                            data = json.loads(json_str)
+                            chunk = data.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                            if chunk:
+                                yield chunk
+                        except json.JSONDecodeError:
+                            continue
         except Exception as e:
-            yield f"\n[Lỗi kết nối Ollama: {e}]"
+            yield f"\n[Lỗi kết nối llama-server: {e}]"
