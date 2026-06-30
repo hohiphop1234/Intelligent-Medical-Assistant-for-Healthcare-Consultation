@@ -55,9 +55,9 @@ class MedicalRAGPipeline:
         self.response_generator = ResponseGenerator()
         self.response_validator = ResponseValidator()
 
-    def process_query(self, question: str) -> dict[str, Any]:
-        if self.safety_guard.is_emergency(question):
-            return self.safety_guard.emergency_response(question)
+    def process_query(self, question: str, isEmergency: bool = False) -> dict[str, Any]:
+        if isEmergency:
+            return self.process_emergency_query(question)
 
         classification = self.query_router.classify(question)
         if classification.category == "out_of_scope":
@@ -96,9 +96,10 @@ class MedicalRAGPipeline:
         response["relevant_count"] = len(graded.relevant_chunks)
         return self.response_validator.validate(response, graded.relevant_chunks)
 
-    def stream_query(self, question: str):
-        if self.safety_guard.is_emergency(question):
-            yield {"type": "metadata", "data": {"type": "emergency", "message": self.safety_guard.emergency_response(question)["message"]}}
+    def stream_query(self, question: str, isEmergency: bool = False):
+        if isEmergency:
+            for item in self.stream_emergency_query(question):
+                yield item
             return
 
         classification = self.query_router.classify(question)
@@ -148,6 +149,124 @@ class MedicalRAGPipeline:
         }
         
         for token in self.response_generator.generate_stream(question, graded.relevant_chunks, classification):
+            yield {"type": "token", "content": token}
+
+    def process_emergency_query(self, question: str) -> dict[str, Any]:
+        """Quy trình RAG chuyên sâu cho nhánh khẩn cấp / cấp cứu"""
+        from src.query_router import QueryClassification
+        classification = QueryClassification(
+            intent="emergency_triage",
+            category="overdose_triage",
+            entities=[],
+            risk_level="critical",
+            confidence=1.0,
+            requires_rag=True
+        )
+        results = self.hybrid_retriever.search(
+            question,
+            top_k=TOP_K + 2,
+            category_filter=None,
+        )
+        graded = self.evidence_grader.grade(question, results)
+        if not graded.relevant_chunks and results:
+            graded.relevant_chunks = results[:2]
+
+        if not graded.relevant_chunks:
+            resp = self.safety_guard.emergency_response(question)
+            return {
+                "type": "emergency",
+                "answer": resp["message"],
+                "sources": [],
+                "evidence_score": 0.0,
+                "retrieved_count": 0,
+                "relevant_count": 0,
+                "route": "emergency_rag",
+                "risk_level": "critical",
+                "category": "overdose_triage"
+            }
+
+        response = self.response_generator.generate(
+            f"[TÌNH HUỐNG KHẨN CẤP Y TẾ - HÃY TRẢ LỜI NGẮN GỌN CÁC BƯỚC SƠ CỨU AN TOÀN] {question}",
+            graded.relevant_chunks,
+            classification
+        )
+        urgent_prefix = (
+            "**🚨 CẢNH BÁO KHẨN CẤP:** Tình huống bạn mô tả có thể là cấp cứu y tế nghiêm trọng. "
+            "Hãy gọi ngay **115** hoặc đến cơ sở y tế gần nhất.\n\n"
+            "--- \n"
+            "**Hướng dẫn sơ cứu ban đầu từ cơ sở dữ liệu y khoa:**\n\n"
+        )
+        answer = urgent_prefix + response.get("answer", "")
+        return {
+            "type": "emergency",
+            "answer": answer,
+            "sources": response.get("sources", []),
+            "evidence_score": graded.score,
+            "retrieved_count": len(results),
+            "relevant_count": len(graded.relevant_chunks),
+            "route": "emergency_rag",
+            "risk_level": "critical",
+            "category": "overdose_triage"
+        }
+
+    def stream_emergency_query(self, question: str):
+        """Stream trả lời RAG cho nhánh khẩn cấp"""
+        from src.query_router import QueryClassification
+        classification = QueryClassification(
+            intent="emergency_triage",
+            category="overdose_triage",
+            entities=[],
+            risk_level="critical",
+            confidence=1.0,
+            requires_rag=True
+        )
+        results = self.hybrid_retriever.search(
+            question,
+            top_k=TOP_K + 2,
+            category_filter=None,
+        )
+        graded = self.evidence_grader.grade(question, results)
+        if not graded.relevant_chunks and results:
+            graded.relevant_chunks = results[:2]
+
+        if not graded.relevant_chunks:
+            resp = self.safety_guard.emergency_response(question)
+            yield {"type": "metadata", "data": {"type": "emergency", "message": resp["message"]}}
+            return
+
+        sources = [
+            {
+                "index": i + 1,
+                "id": chunk.get("id", ""),
+                "title": chunk.get("title", ""),
+                "content": chunk.get("content", "")
+            }
+            for i, chunk in enumerate(graded.relevant_chunks)
+        ]
+        disclaimer = "**🚨 CẢNH BÁO KHẨN CẤP:** Hãy gọi ngay 115 hoặc đến cơ sở y tế gần nhất. Thông tin sơ cứu trên chỉ hỗ trợ ban đầu và không thay thế bác sĩ."
+        yield {
+            "type": "metadata",
+            "data": {
+                "type": "message",
+                "sources": sources,
+                "category": "overdose_triage",
+                "risk_level": "critical",
+                "route": "emergency_rag",
+                "disclaimer": disclaimer
+            }
+        }
+        urgent_prefix = (
+            "**🚨 CẢNH BÁO KHẨN CẤP:** Tình huống bạn mô tả có thể là cấp cứu y tế nghiêm trọng. "
+            "Hãy gọi ngay **115** hoặc đến cơ sở y tế gần nhất.\n\n"
+            "--- \n"
+            "**Hướng dẫn sơ cứu ban đầu từ cơ sở dữ liệu y khoa:**\n\n"
+        )
+        yield {"type": "token", "content": urgent_prefix}
+        for token in self.response_generator.generate_stream(
+            f"[TÌNH HUỐNG KHẨN CẤP Y TẾ - HÃY TRẢ LỜI NGẮN GỌN CÁC BƯỚC SƠ CỨU AN TOÀN] {question}",
+            graded.relevant_chunks,
+            classification
+        ):
             yield {"type": "token", "content": token}
 
     def _retrieval_category_filter(

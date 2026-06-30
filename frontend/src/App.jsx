@@ -15,6 +15,7 @@ function App() {
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isEmergency, setIsEmergency] = useState(false);
   const [stats, setStats] = useState(null);
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
@@ -59,7 +60,7 @@ function App() {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ message: userMsg })
+        body: JSON.stringify({ message: userMsg, isEmergency: isEmergency })
       });
 
       if (!response.ok) {
@@ -205,7 +206,7 @@ function App() {
                   <span>Danh mục: {msg.metadata.category}</span>
                 )}
                 <span>•</span>
-                <span>Luồng: {msg.metadata.route === 'general_qa' ? '🤖 Local LLM' : '🔍 RAG Pipeline'}</span>
+                <span>Luồng: {msg.metadata.route === 'general_qa' ? '🤖 Local LLM' : (msg.metadata.route === 'emergency_rag' ? '🚨 Emergency RAG' : '🔍 RAG Pipeline')}</span>
               </div>
             )}
             
@@ -227,7 +228,30 @@ function App() {
         <div ref={messagesEndRef} />
       </main>
 
-      <footer className="input-area">
+      <footer className="input-area" style={{ flexDirection: 'column', gap: '8px' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+          <button
+            type="button"
+            onClick={() => setIsEmergency(!isEmergency)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 16px',
+              borderRadius: '20px',
+              border: isEmergency ? '2px solid #ef4444' : '1px solid var(--border-color)',
+              backgroundColor: isEmergency ? 'rgba(239, 68, 68, 0.25)' : 'rgba(30, 41, 59, 0.6)',
+              color: isEmergency ? '#ef4444' : 'var(--text-muted)',
+              cursor: 'pointer',
+              fontWeight: isEmergency ? '700' : '500',
+              fontSize: '0.85rem',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <AlertTriangle size={16} color={isEmergency ? '#ef4444' : 'var(--text-muted)'} />
+            {isEmergency ? '🚨 Chế độ Cấp cứu: ĐANG BẬT (Chuyển thẳng Emergency RAG)' : '⚪ Chế độ Cấp cứu: Tắt'}
+          </button>
+        </div>
         <div className="input-wrapper">
           <Stethoscope size={24} color="var(--text-muted)" />
           <textarea

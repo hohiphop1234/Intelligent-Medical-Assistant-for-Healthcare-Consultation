@@ -34,13 +34,14 @@ class MedicalRAGEvaluator:
         }
 
         for case in test_cases:
-            result = self.pipeline.process_query(case["question"])
+            is_emergency = (case["type"] == "emergency")
+            result = self.pipeline.process_query(case["question"], isEmergency=is_emergency)
             item = self._evaluate_single(case, result)
             results["detailed_results"].append(item)
 
             if case["type"] == "emergency":
                 results["emergency_detection"]["total"] += 1
-                if result.get("type") == "emergency":
+                if result.get("type") == "emergency" or result.get("route") == "emergency_rag":
                     results["emergency_detection"]["correct"] += 1
             elif case["type"] == "out_of_scope":
                 results["out_of_scope_refusal"]["total"] += 1

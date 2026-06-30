@@ -36,6 +36,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Medical RAG Assistant")
     parser.add_argument("--ingest", action="store_true", help="Ingest data into stores")
     parser.add_argument("--query", type=str, help="Ask one question")
+    parser.add_argument("--emergency", action="store_true", help="Set emergency flag")
     parser.add_argument("--json", action="store_true", help="Print raw JSON result")
     args = parser.parse_args()
 
@@ -48,19 +49,23 @@ def main() -> None:
         return
 
     if args.query:
-        result = pipeline.process_query(args.query)
+        result = pipeline.process_query(args.query, isEmergency=args.emergency)
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
         else:
             print_result(result)
         return
 
-    print("Medical Assistant CLI. Type 'quit' to exit.")
+    print("Medical Assistant CLI. Type 'quit' to exit. Prefix with '!emergency ' to toggle emergency flag.")
     while True:
         question = input("\nYou: ").strip()
         if question.lower() in {"quit", "exit"}:
             break
-        result = pipeline.process_query(question)
+        is_emerg = False
+        if question.startswith("!emergency "):
+            is_emerg = True
+            question = question[len("!emergency "):].strip()
+        result = pipeline.process_query(question, isEmergency=is_emerg)
         print("\nAssistant:")
         print_result(result)
 

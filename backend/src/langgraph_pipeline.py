@@ -15,6 +15,7 @@ class MedicalState(TypedDict):
     State chung cho toàn bộ quá trình trả lời câu hỏi y tế.
     """
     question: str
+    isEmergency: Optional[bool]  # Biến cờ cấp cứu từ người dùng bấm bật lên
     
     # Kết quả từ Classifier
     category: Optional[str]
@@ -37,16 +38,51 @@ class MedicalState(TypedDict):
 
 
 # =====================================================================
-# 2. Xây dựng Đồ thị LangGraph
+# 2. Đồ thị riêng biệt cho nhánh Emergency (Emergency RAG Graph)
+# =====================================================================
+class EmergencyRAGGraph:
+    """
+    Đồ thị riêng biệt xử lý nhánh cấp cứu (Emergency RAG Branch).
+    Tạo đồ thị mới để tách biệt hoàn toàn nhánh emergency, tránh làm rối đồ thị chính.
+    """
+    def __init__(self, rag_pipeline: MedicalRAGPipeline):
+        self.rag_pipeline = rag_pipeline
+        self.graph = self._build_graph()
+
+    def _build_graph(self):
+        workflow = StateGraph(MedicalState)
+        workflow.add_node("emergency_rag_node", self.emergency_rag_node)
+        workflow.set_entry_point("emergency_rag_node")
+        workflow.add_edge("emergency_rag_node", END)
+        return workflow.compile()
+
+    def emergency_rag_node(self, state: MedicalState) -> MedicalState:
+        """Chuyển thẳng qua node RAG của emergency: Truy xuất kiến thức cấp cứu và sơ cứu"""
+        question = state["question"]
+        result = self.rag_pipeline.process_emergency_query(question)
+        return {
+            **state,
+            "answer": result.get("answer"),
+            "sources": result.get("sources", []),
+            "category": result.get("category", "overdose_triage"),
+            "risk_level": result.get("risk_level", "critical"),
+            "route": "emergency_rag",
+            "evidence_score": result.get("evidence_score", 1.0),
+            "retrieved_count": result.get("retrieved_count", 0),
+            "relevant_count": result.get("relevant_count", 0),
+        }
+
+
+# =====================================================================
+# 3. Xây dựng Đồ thị LangGraph chính
 # =====================================================================
 class LangGraphPipeline:
     """
     Đồ thị điều phối luồng xử lý câu hỏi y khoa:
-    Question -> Safety Node -> Classifier Node -> LLM QA Node / RAG Node -> END
+    Router (isEmergency flag) -> Emergency Graph / Classifier Node -> RAG Node / General QA -> END
     """
     
     def __init__(self):
-        # Tái sử dụng các thành phần từ RAG Pipeline hiện tại
         self.rag_pipeline = MedicalRAGPipeline()
         self.safety_guard = self.rag_pipeline.safety_guard
         self.query_router = self.rag_pipeline.query_router
@@ -55,30 +91,37 @@ class LangGraphPipeline:
         # Nhánh LLM General QA
         self.llm = QwenMedicalLLM()
         
-        # Khởi tạo đồ thị
+        # Khởi tạo đồ thị riêng cho Emergency
+        self.emergency_graph = EmergencyRAGGraph(self.rag_pipeline)
+        
+        # Khởi tạo đồ thị chính
         self.graph = self._build_graph()
         
     def _build_graph(self):
         workflow = StateGraph(MedicalState)
         
         # Đăng ký các nodes
-        workflow.add_node("safety_check_node", self.safety_check_node)
+        workflow.add_node("router_node", self.router_node)
+        workflow.add_node("emergency_branch_node", self.emergency_branch_node)
         workflow.add_node("classifier_node", self.classifier_node)
         workflow.add_node("general_qa_node", self.general_qa_node)
         workflow.add_node("rag_node", self.rag_node)
         
-        # Đăng ký các edges
-        workflow.set_entry_point("safety_check_node")
+        # Đăng ký entry point tại router_node kiểm tra state
+        workflow.set_entry_point("router_node")
         
-        # Từ safety_check_node, nếu bị chặn (safety_alert = True) -> END. Nếu an toàn -> classifier_node
+        # Từ router_node, kiểm tra biến isEmergency trong state (không hardcode từ khóa)
         workflow.add_conditional_edges(
-            "safety_check_node",
-            self._route_after_safety,
+            "router_node",
+            self._route_initial,
             {
-                "end": END,
-                "continue": "classifier_node"
+                "emergency": "emergency_branch_node",
+                "standard": "classifier_node"
             }
         )
+        
+        # Nhánh emergency chuyển thẳng sang đồ thị Emergency RAG riêng biệt rồi kết thúc
+        workflow.add_edge("emergency_branch_node", END)
         
         # Từ classifier_node, phân nhánh: rag_node hoặc general_qa_node
         workflow.add_conditional_edges(
@@ -90,32 +133,22 @@ class LangGraphPipeline:
             }
         )
         
-        # Cả hai nhánh đều dẫn tới kết thúc
         workflow.add_edge("general_qa_node", END)
         workflow.add_edge("rag_node", END)
         
         return workflow.compile()
 
     # =====================================================================
-    # 3. Định nghĩa các Node (Thực thi logic)
+    # 4. Định nghĩa các Node (Thực thi logic)
     # =====================================================================
     
-    def safety_check_node(self, state: MedicalState) -> MedicalState:
-        """Kiểm tra câu hỏi có phải cấp cứu hay không"""
-        question = state["question"]
-        
-        if self.safety_guard.is_emergency(question):
-            emergency_resp = self.safety_guard.emergency_response(question)
-            return {
-                **state,
-                "answer": emergency_resp["message"],
-                "safety_alert": True
-            }
-            
-        return {
-            **state,
-            "safety_alert": False
-        }
+    def router_node(self, state: MedicalState) -> MedicalState:
+        """Kiểm tra cờ isEmergency từ state, không dùng hardcoded keywords"""
+        return state
+
+    def emergency_branch_node(self, state: MedicalState) -> MedicalState:
+        """Gọi thực thi đồ thị riêng biệt của nhánh emergency"""
+        return self.emergency_graph.graph.invoke(state)
         
     def classifier_node(self, state: MedicalState) -> MedicalState:
         """Phân loại câu hỏi để quyết định đi nhánh nào"""
@@ -144,7 +177,6 @@ class LangGraphPipeline:
                 "answer": insuf_resp["message"]
             }
             
-        # Quyết định route: Các danh mục liên quan tới bệnh án, rủi ro cao -> RAG. Cơ bản -> LLM QA.
         rag_categories = {
             "safety", "interactions", "contraindications", "contraindication",
             "pregnancy", "overdose", "pediatric", "patient_query", "case_based", "edge_case"
@@ -165,29 +197,21 @@ class LangGraphPipeline:
         }
 
     def general_qa_node(self, state: MedicalState) -> MedicalState:
-        """Nhánh LLM: Dùng mô hình Qwen3-4B cục bộ để sinh câu trả lời"""
-        # Nếu đã có answer từ safety check hoặc classifier (out of scope) thì bỏ qua LLM
+        """Nhánh LLM: Dùng mô hình Qwen cục bộ để sinh câu trả lời"""
         if state.get("answer"):
             return state
             
         question = state["question"]
-        
-        # Sinh câu trả lời siêu tốc bằng model cục bộ
         answer = self.llm.generate_answer(question)
         
         return {
             **state,
             "answer": answer,
-            "sources": []  # Nhánh QA cơ bản không có trích dẫn RAG
+            "sources": []
         }
         
     def rag_node(self, state: MedicalState) -> MedicalState:
-        """Nhánh RAG: Gọi logic RAG gốc của MedicalRAGPipeline"""
-        # Tránh việc phân loại lại, chúng ta tận dụng cấu trúc cũ
-        # Để nhanh, chúng ta chỉ gọi các step tìm kiếm và sinh của RAG pipeline cũ
-        # Nhưng để tái sử dụng toàn diện nhất, có thể gọi .process_query (nó sẽ làm lại việc safety check một chút)
-        
-        # Gọi trực tiếp process_query của MedicalRAGPipeline (đã được bọc lại an toàn)
+        """Nhánh RAG tiêu chuẩn"""
         result = self.rag_pipeline.process_query(state["question"])
         
         return {
@@ -200,31 +224,29 @@ class LangGraphPipeline:
         }
 
     # =====================================================================
-    # 4. Routing Functions
+    # 5. Routing Functions
     # =====================================================================
     
-    def _route_after_safety(self, state: MedicalState) -> str:
-        if state.get("safety_alert"):
-            return "end"
-        return "continue"
+    def _route_initial(self, state: MedicalState) -> str:
+        """Điều hướng dựa vào biến isEmergency trong state (bật cờ từ UI/API)"""
+        if state.get("isEmergency") is True or state.get("is_emergency") is True:
+            return "emergency"
+        return "standard"
         
     def _route_after_classifier(self, state: MedicalState) -> str:
         if state.get("route") == "end_now":
-            # Gộp thành END nếu đã trả lời xong (Out of scope/insufficient)
-            return "general_qa" # Sẽ bypass do đã có answer, hoặc có thể return rag_node. Tốt nhất tạo luồng chuẩn.
-            # Ở đây LangGraph yêu cầu trả về key chính xác trong map đã định nghĩa.
-            # Trong _build_graph map = {"rag": "rag_node", "general_qa": "general_qa_node"}
-            # Nếu end_now, có thể ép vào general_qa_node, node đó phải check nếu có answer rồi thì bỏ qua sinh LLM.
+            return "general_qa"
         return state.get("route", "general_qa")
 
     # =====================================================================
-    # 5. Hàm thực thi chính
+    # 6. Hàm thực thi chính & streaming
     # =====================================================================
     
-    def process_query(self, question: str) -> dict:
+    def process_query(self, question: str, isEmergency: bool = False) -> dict:
         """Entrypoint cho toàn bộ đồ thị"""
         initial_state = {
             "question": question,
+            "isEmergency": isEmergency,
             "category": None,
             "risk_level": None,
             "entities": None,
@@ -240,9 +262,21 @@ class LangGraphPipeline:
         
         final_state = self.graph.invoke(initial_state)
         
-        # Nếu là safety alert hoặc out_of_scope/insufficient_evidence
-        if final_state.get("safety_alert"):
-            return {"type": "emergency", "message": final_state.get("answer")}
+        if final_state.get("route") == "emergency_rag" or final_state.get("safety_alert"):
+            return {
+                "type": "emergency",
+                "message": final_state.get("answer", ""),
+                "answer": final_state.get("answer", ""),
+                "sources": final_state.get("sources", []),
+                "risk_level": final_state.get("risk_level", "critical"),
+                "category": final_state.get("category", "overdose_triage"),
+                "route": "emergency_rag",
+                "classification_confidence": 1.0,
+                "confidence": final_state.get("evidence_score", 1.0),
+                "evidence_score": final_state.get("evidence_score", 1.0),
+                "retrieved_count": final_state.get("retrieved_count", 0),
+                "relevant_count": final_state.get("relevant_count", 0)
+            }
         
         if final_state.get("route") == "end_now":
             if final_state.get("category") == "out_of_scope":
@@ -250,7 +284,6 @@ class LangGraphPipeline:
             else:
                 return {"type": "insufficient_evidence", "message": final_state.get("answer")}
         
-        # Format lại output giống với RAG Pipeline cũ để app.py không bị lỗi
         return {
             "answer": final_state.get("answer", "Xin lỗi, đã có lỗi xảy ra."),
             "sources": final_state.get("sources", []),
@@ -263,3 +296,12 @@ class LangGraphPipeline:
             "retrieved_count": final_state.get("retrieved_count", 0),
             "relevant_count": final_state.get("relevant_count", 0)
         }
+
+    def stream_query(self, question: str, isEmergency: bool = False):
+        """Stream qua RAG pipeline theo nhánh tương ứng"""
+        if isEmergency:
+            for item in self.rag_pipeline.stream_emergency_query(question):
+                yield item
+        else:
+            for item in self.rag_pipeline.stream_query(question):
+                yield item

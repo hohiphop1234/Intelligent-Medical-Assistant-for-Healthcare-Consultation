@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from config import (
     LLM_MAX_TOKENS,
@@ -62,7 +65,7 @@ class ResponseGenerator:
             if answer.startswith("Lỗi:"):
                 raise Exception(answer)
         except Exception as e:
-            print(f"\\n[RAG Pipeline] Local LLM Failed: {e}\\n")
+            logger.warning("[RAG Pipeline] Local LLM Failed: %s", e)
             answer, used_chunks = self._generate_extractive(
                 question, chunks, classification
             )
@@ -140,7 +143,7 @@ class ResponseGenerator:
         try:
             yield from self._generate_with_llm_stream(question, chunks)
         except Exception as e:
-            print(f"\n[RAG Pipeline] Local LLM Stream Failed: {e}\n")
+            logger.warning("[RAG Pipeline] Local LLM Stream Failed: %s", e)
             ans, _ = self._generate_extractive(question, chunks, classification)
             yield ans
 

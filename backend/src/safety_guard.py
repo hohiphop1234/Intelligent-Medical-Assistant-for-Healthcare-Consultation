@@ -6,23 +6,9 @@ from typing import Any
 from src.utils import load_json, normalize_for_match
 
 
-EMERGENCY_PATTERNS = [
-    r"\bdau nguc\b",
-    r"\bkho tho\b",
-    r"\bkhong tho duoc\b",
-    r"\bdot quy\b",
-    r"\bnhoi mau\b",
-    r"\btu tu\b",
-    r"\bmuon chet\b",
-    r"\btu gay thuong tich\b",
-    r"\bchay mau nhieu\b",
-    r"\bchay mau khong ngung\b",
-    r"\bbat tinh\b",
-    r"\bco giat\b",
-    r"\bdi ung\b.*\bsung\b",
-    r"\bsoc phan ve\b",
-    r"\bhon me\b",
-]
+# Đừng hardcode ghi 1 đống keyword theo yêu cầu người dùng
+# Tình trạng khẩn cấp được xác định qua cờ isEmergency từ người dùng / state của LangGraph
+EMERGENCY_PATTERNS = []
 
 EMERGENCY_RESPONSE = (
     "**CANH BAO KHAN CAP**\n\n"

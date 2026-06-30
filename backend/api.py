@@ -36,6 +36,7 @@ async def startup_event():
 
 class ChatRequest(BaseModel):
     message: str
+    isEmergency: Optional[bool] = False
 
 class ChatResponse(BaseModel):
     type: str # "message", "emergency", "out_of_scope", "insufficient_evidence"
@@ -50,13 +51,23 @@ class ChatResponse(BaseModel):
 async def chat_endpoint(request: ChatRequest):
     try:
         pipeline = get_pipeline()
-        result = pipeline.process_query(request.message)
+        result = pipeline.process_query(request.message, isEmergency=request.isEmergency)
         
         # Xử lý các luồng đặc biệt
-        if result.get("type") in {"emergency", "out_of_scope", "insufficient_evidence"}:
+        if result.get("type") in {"out_of_scope", "insufficient_evidence"}:
             return ChatResponse(
                 type=result["type"],
                 message=result["message"]
+            )
+        if result.get("type") == "emergency":
+            return ChatResponse(
+                type="emergency",
+                message=result.get("message", result.get("answer", "")),
+                sources=result.get("sources", []),
+                category=result.get("category", "overdose_triage"),
+                risk_level="critical",
+                route=result.get("route", "emergency_rag"),
+                confidence=result.get("confidence", 1.0)
             )
         
         # Ghép phần disclaimer vào cuối answer
@@ -96,8 +107,7 @@ async def chat_stream_endpoint(request: ChatRequest):
     
     async def event_generator():
         try:
-            # Bypass langgraph for streaming, use rag_pipeline directly
-            for item in pipeline.rag_pipeline.stream_query(request.message):
+            for item in pipeline.stream_query(request.message, isEmergency=request.isEmergency):
                 yield f"data: {json.dumps(item, ensure_ascii=False)}\n\n"
         except Exception as e:
             logger.error(f"Error in stream: {e}")
