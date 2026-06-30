@@ -50,3 +50,7 @@ models/chromadb/
 models/*.gguf
 
 backend.rar
+/backend/llama-b9850-bin-win-vulkan-x64
+backend/llama_log.txt
+Modelfile
+backend/debug_llm.txt

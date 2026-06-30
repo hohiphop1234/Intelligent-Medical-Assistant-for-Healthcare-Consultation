@@ -1,4 +1,4 @@
-FROM ./backend/models/qwen3-4b-thinking.gguf
+FROM models\qwen3-4b-thinking.gguf
 
 TEMPLATE """{{ if .System }}<|im_start|>system
 {{ .System }}<|im_end|>
