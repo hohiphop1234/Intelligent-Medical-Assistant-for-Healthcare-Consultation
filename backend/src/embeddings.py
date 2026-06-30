@@ -56,7 +56,12 @@ class EmbeddingManager:
             return self._model
         try:
             from sentence_transformers import SentenceTransformer
-            self._model = SentenceTransformer(EMBEDDING_MODEL_VI, device='cpu')
+            try:
+                # Try loading from local cache first to avoid internet requests
+                self._model = SentenceTransformer(EMBEDDING_MODEL_VI, device='cpu', local_files_only=True, trust_remote_code=True)
+            except Exception:
+                # Fallback to online loading to download the model if not cached yet
+                self._model = SentenceTransformer(EMBEDDING_MODEL_VI, device='cpu', trust_remote_code=True)
             return self._model
         except ImportError:
             self._model_failed = True
