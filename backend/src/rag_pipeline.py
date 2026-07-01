@@ -169,6 +169,7 @@ class MedicalRAGPipeline:
     def ingest_data(self) -> dict[str, int]:
         ensure_dir(PROCESSED_DATA_DIR)
         ensure_dir(Path(BM25_INDEX_PATH).parent)
+        print("Bắt đầu giai đoạn 1: Làm sạch & chuẩn hóa dữ liệu thô...")
         cleaner = DataCleaner()
         cleaner.process_dataset(RAW_DATA_DIR, PROCESSED_DATA_DIR)
         self.vector_store.reset()
@@ -178,8 +179,11 @@ class MedicalRAGPipeline:
         chunks = load_jsonl(chunks_path)
         all_chunks["vi"] = chunks
         texts = [chunk["content"] for chunk in chunks]
+        print(f"\nBắt đầu giai đoạn 2: Tạo vector embedding cho {len(texts):,} chunks...")
         embeddings = self.embedding_manager.embed_batch(texts)
+        print(f"\nBắt đầu giai đoạn 3: Nạp vào ChromaDB...")
         self.vector_store.add_documents(chunks, embeddings)
+        print(f"\nBắt đầu giai đoạn 4: Xây dựng chỉ mục từ khóa BM25...")
         self.bm25_store.build_index(chunks)
 
         self.bm25_store.save(BM25_INDEX_PATH)

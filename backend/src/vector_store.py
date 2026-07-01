@@ -38,8 +38,9 @@ class VectorStore:
         if not chunks:
             return
         if self.use_chroma:
+            from tqdm import tqdm
             max_batch = 5000
-            for i in range(0, len(chunks), max_batch):
+            for i in tqdm(range(0, len(chunks), max_batch), desc="💾 Nạp vào ChromaDB", unit="lô"):
                 batch_chunks = chunks[i:i + max_batch]
                 batch_embeddings = embeddings[i:i + max_batch]
                 self.collection.upsert(

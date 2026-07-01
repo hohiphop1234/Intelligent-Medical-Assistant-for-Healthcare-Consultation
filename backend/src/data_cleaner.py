@@ -77,6 +77,8 @@ class DataCleaner:
 
     def remove_noise(self, text: str) -> str:
         cleaned = text
+        cleaned = re.sub(r'<think>.*?</think>', '', cleaned, flags=re.DOTALL | re.IGNORECASE)
+        cleaned = re.sub(r'</?think>', '', cleaned, flags=re.IGNORECASE)
         for pattern in self.NOISE_PATTERNS:
             cleaned = re.sub(pattern, " ", cleaned, flags=re.IGNORECASE | re.DOTALL)
         cleaned = re.sub(r"\s+", " ", cleaned)
@@ -137,10 +139,11 @@ class DataCleaner:
             if not f.name.startswith("clean_")
         )
         
+        from tqdm import tqdm
         all_cleaned_rows = []
         for source_file in vi_files:
             rows = self._load_jsonl(source_file)
-            for row in rows:
+            for row in tqdm(rows, desc=f"🧹 Làm sạch & lọc rác ({source_file.name})", unit="chunk"):
                 cleaned = self.clean_chunk(row)
                 if cleaned is not None:
                     all_cleaned_rows.append(cleaned)
