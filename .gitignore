@@ -51,6 +51,7 @@ models/*.gguf
 
 backend.rar
 /backend/llama-b9850-bin-win-vulkan-x64
+/backend/llama-b9856-bin-win-cuda-12.4-x64
 backend/llama_log.txt
 Modelfile
 backend/debug_llm.txt

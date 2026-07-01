@@ -22,8 +22,9 @@ def get_pipeline():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from src.llama_manager import LlamaServerManager
+    from config import LLAMA_MODEL_PATH, LLAMA_SERVER_PORT
     logger.info("Starting llama-server background process...")
-    LlamaServerManager().start(model_path="models/qwen3-4b-thinking.gguf", port=8080)
+    LlamaServerManager().start(model_path=LLAMA_MODEL_PATH, port=LLAMA_SERVER_PORT)
     logger.info("Preloading pipeline on startup...")
     get_pipeline()
     logger.info("Pipeline preloaded successfully.")

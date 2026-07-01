@@ -34,10 +34,10 @@ Dự án được phát triển theo hướng đi chuẩn xác và hiện đại
    - Thuật toán **Reciprocal Rank Fusion (RRF)** dung hợp kết quả từ hai bộ máy, loại bỏ nhiễu và đưa ra bằng chứng liên quan nhất.
 
 4. **Thẩm định Bằng chứng & Tự động Bổ sung Kiến thức (Evidence Grader & Web Crawler):**
-   - Bằng chứng truy xuất được tự động chấm điểm độ tin cậy. Nếu dữ liệu nội bộ không đủ độ tin cậy, hệ thống kích hoạt **Crawler chuyên dụng** tìm kiếm bổ sung từ các nguồn y khoa uy tín hàng đầu thế giới (`medlineplus.gov`, `dailymed.nlm.nih.gov`, `fda.gov`, `who.int`).
+   - Bằng chứng truy xuất được tự động chấm điểm độ tin cậy. Nếu dữ liệu nội bộ không đủ độ tin cậy, hệ thống kích hoạt **Crawler chuyên dụng** tìm kiếm bổ sung từ các nguồn y khoa uy tín tại Việt Nam (`tamanhhospital.vn`, `vinmec.com`, `hellobacsi.com`, `moh.gov.vn`, `vncdc.gov.vn`).
 
-5. **Tối ưu hóa AI Cục bộ (Local LLM với Ollama):**
-   - Hỗ trợ chạy các mô hình tinh chỉnh y tế cục bộ (như `Qwen3-4B-Medical` qua **Ollama** hoặc các mô hình GGUF) giúp bảo mật tuyệt đối thông tin nhạy cảm của người bệnh, tốc độ phản hồi siêu tốc và khả năng hoạt động offline.
+5. **Tối ưu hóa AI Cục bộ (Local LLM với llama.cpp / llama-server):**
+   - Hỗ trợ chạy trực tiếp mô hình tinh chỉnh y tế cục bộ định dạng GGUF (`Qwen3-4B-Thinking`) qua **llama-server** tích hợp sẵn giúp bảo mật tuyệt đối thông tin nhạy cảm của người bệnh, tốc độ phản hồi siêu tốc và tự động hóa vòng đời khởi động cùng backend API.
 
 ---
 
@@ -64,13 +64,13 @@ flowchart TD
         subgraph RAG ["Luồng Hybrid RAG Pipeline"]
             Ret["Hybrid Retrieval (ChromaDB + BM25)"] --> RRF["Dung hợp RRF"]
             RRF --> Grader["Thẩm định bằng chứng (Evidence Grader)"]
-            Grader -->|Bằng chứng yếu| Web["Cào dữ liệu uy tín (MedlinePlus, FDA, WHO)"]
+            Grader -->|Bằng chứng yếu| Web["Cào dữ liệu uy tín (Vinmec, Tâm Anh, Bộ Y Tế)"]
             Web --> Grader
             Grader -->|Đạt yêu cầu| Gen["Sinh câu trả lời kèm Trích dẫn"]
         end
         
         RAGNode --> Ret
-        LLMNode --> LocalLLM["Ollama Local LLM (Qwen-Medical)"]
+        LLMNode --> LocalLLM["Local LLM (Qwen3-4B via llama-server)"]
     end
     
     Gen --> Validator["Kiểm định & Gắn cảnh báo rủi ro (Response Validator)"]
@@ -151,14 +151,11 @@ HF_TOKEN=your_huggingface_token_here
 FORCE_FALLBACK_EMBEDDINGS=false
 ```
 
-### 2. Chuẩn bị Mô hình Local AI (Ollama)
+### 2. Chuẩn bị Mô hình Local AI (llama-server)
 
-Hệ thống hoạt động 100% cục bộ (Local AI), không phụ thuộc vào API bên thứ ba để đảm bảo quyền riêng tư dữ liệu y tế. Bạn cần chuẩn bị Ollama:
-1. Cài đặt [Ollama](https://ollama.ai/).
-2. Tạo model y tế từ `Modelfile` có sẵn trong dự án:
-   ```powershell
-   ollama create qwen_medical -f Modelfile
-   ```
+Hệ thống hoạt động 100% cục bộ (Local AI), sử dụng **llama-server** được tích hợp sẵn trong `backend/` để chạy mô hình GGUF (`models/qwen3-4b-thinking.gguf`).
+- Bạn **không cần** cài đặt hay bật thủ công dịch vụ LLM bên ngoài (như Ollama).
+- Khi chạy lệnh `python api.py`, backend sẽ tự động khởi tạo tiến trình nền `llama-server` trên cổng `8080` và nạp mô hình vào RAM/VRAM.
 
 ### 3. Chuẩn bị Cơ sở Dữ liệu Kiến thức (Data Ingestion)
 
@@ -186,8 +183,8 @@ python api.py
 #### 🖥️ Terminal 2: Khởi chạy Frontend Web UI (React + Vite)
 ```powershell
 cd frontend
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 *Giao diện Web App sẽ chạy tại:* `http://localhost:5173`. Open trình duyệt và bắt đầu trải nghiệm tư vấn sức khỏe!
 
@@ -247,4 +244,4 @@ Hệ thống tuân thủ nghiêm ngặt 4 nguyên tắc bảo vệ:
 ## 💡 Hướng dẫn Xử lý Sự cố (Troubleshooting)
 
 - **Lỗi `Collection expecting embedding with dimension...`:** Xảy ra khi chuyển đổi mô hình embedding (giữa fallback hash và mô hình thật). Khắc phục bằng cách nạp lại dữ liệu: `cd backend && python main.py --ingest`.
-- **Lỗi không kết nối được Ollama:** Đảm bảo dịch vụ Ollama đang chạy ngầm trên máy (`http://localhost:11434`) và đã tải model `qwen_medical`. Nếu LLM gặp lỗi, pipeline RAG được thiết kế để tự động kích hoạt cơ chế rút trích thông tin trực tiếp (extractive fallback) từ tài liệu RAG nhằm đảm bảo phản hồi không bị gián đoạn.
+- **Lỗi khởi động / kết nối llama-server:** Đảm bảo cổng `8080` chưa bị chiếm dụng bởi ứng dụng khác và file mô hình `models/qwen3-4b-thinking.gguf` tồn tại. Nếu LLM gặp trục trặc, hệ thống có cơ chế extractive fallback rút trích thông tin trực tiếp từ tài liệu RAG để đảm bảo phản hồi không bị gián đoạn.

@@ -1,6 +1,7 @@
 import requests
 import json
 import os
+from config import LLAMA_SERVER_URL
 
 class QwenMedicalLLM:
     """
@@ -16,12 +17,12 @@ class QwenMedicalLLM:
         return cls._instance
 
     def __init__(self):
-        self.llama_url = "http://localhost:8080/v1/chat/completions"
+        self.llama_url = f"{LLAMA_SERVER_URL}/v1/chat/completions"
         self.model_name = "qwen3-4b-thinking" # Có thể bất kỳ tên nào vì llama-server dùng model đã nạp sẵn
         
         # Kiểm tra trạng thái llama-server
         try:
-            res = requests.get("http://localhost:8080/health", timeout=2)
+            res = requests.get(f"{LLAMA_SERVER_URL}/health", timeout=2)
             self._is_loaded = res.status_code == 200
         except Exception:
             self._is_loaded = False

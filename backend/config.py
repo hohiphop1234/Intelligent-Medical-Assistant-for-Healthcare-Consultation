@@ -16,6 +16,10 @@ LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.15"))
 LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "2048"))
 
 # Local LLM
+LLAMA_SERVER_PORT = int(os.getenv("LLAMA_SERVER_PORT", "8080"))
+LLAMA_MODEL_PATH = os.getenv("LLAMA_MODEL_PATH", str(BASE_DIR / "models" / "qwen3-4b-thinking.gguf"))
+LLAMA_SERVER_URL = f"http://localhost:{LLAMA_SERVER_PORT}"
+
 
 # Embeddings
 EMBEDDING_MODEL_VI = os.getenv(

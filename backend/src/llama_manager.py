@@ -4,6 +4,7 @@ import requests
 import logging
 import os
 import atexit
+from config import LLAMA_MODEL_PATH, LLAMA_SERVER_PORT
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +17,7 @@ class LlamaServerManager:
             cls._instance.process = None
         return cls._instance
 
-    def start(self, model_path="models/qwen3-4b-thinking.gguf", port=8080):
+    def start(self, model_path=LLAMA_MODEL_PATH, port=LLAMA_SERVER_PORT):
         if self.process is not None:
             logger.info("llama-server is already running.")
             return
@@ -34,11 +35,10 @@ class LlamaServerManager:
             if not llama_exe:
                 llama_exe = "llama-server"
         
-        # Ensure model_path is absolute based on project root if it's relative
+        # Ensure model_path is absolute based on backend directory if it's relative
         if not os.path.isabs(model_path):
-            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            project_root = os.path.dirname(project_root) # go up from backend to root
-            model_path = os.path.join(project_root, model_path)
+            backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            model_path = os.path.join(backend_dir, model_path)
             
         # Detect optimal physical cores for CPU threading
         cpu_count = os.cpu_count() or 8
