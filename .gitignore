@@ -54,3 +54,4 @@ backend.rar
 backend/llama_log.txt
 Modelfile
 backend/debug_llm.txt
+server_log.txt
