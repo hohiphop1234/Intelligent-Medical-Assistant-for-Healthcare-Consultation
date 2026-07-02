@@ -101,7 +101,7 @@ flowchart TD
 │   │   ├── chromadb/              # Cơ sở dữ liệu Vector Store y khoa tiếng Việt
 │   │   ├── qwen3-4b-thinking.gguf # Mô hình LLM suy luận cục bộ GGUF
 │   │   ├── bm25_index.pkl         # Chỉ mục từ khóa BM25 Lexical Search
-│   │   └── t5_query_rewriter/     # 🌟 Mô hình T5 Query Rewriter đã fine-tune
+│   │   └── t5_query_rewriter/     # Mô hình T5 Query Rewriter đã fine-tune
 │   │        ├── config.json
 │   │        ├── model.safetensors # Trọng số mô hình VietAI/vit5
 │   │        └── tokenizer.json    # Từ điển chuẩn 36,000 từ tiếng Việt
@@ -122,7 +122,7 @@ flowchart TD
 │   ├── 01-train-qwen3-medical-qa.ipynb            # Huấn luyện fine-tune LLM y tế Qwen3-4B
 │   ├── 02-translate-medical-rag-en2vi.ipynb       # Dịch tập kiến thức RAG sang tiếng Việt
 │   ├── 03_clean_rag_chunks_vi.ipynb               # Làm sạch & chuẩn hóa phân mảnh RAG
-│   ├── 04-finetune-t5-query-rewriter-kaggle.ipynb # 🌟 Fine-tune mô hình T5 Query Rewriter SOTA
+│   ├── 04-finetune-t5-query-rewriter-kaggle.ipynb # Fine-tune mô hình T5 Query Rewriter SOTA
 │   ├── ddp-finetuning.ipynb                       # Huấn luyện phân tán đa GPU (DDP) trên Kaggle
 │   └── evaluate_on_kaggle.ipynb                   # Đánh giá & kiểm thử chỉ số mô hình trên Kaggle
 └── README.md                      # Tài liệu hướng dẫn hệ thống
