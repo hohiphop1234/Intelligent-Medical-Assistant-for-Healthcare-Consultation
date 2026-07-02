@@ -119,9 +119,12 @@ flowchart TD
 │   ├── package.json               # Cấu hình & thư viện NodeJS
 │   └── vite.config.js             # Cấu hình Vite bundler
 ├── notebooks/                     # Nghiên cứu, thực nghiệm & fine-tuning AI
-│   ├── 01-train-qwen3-medical-qa.ipynb # Huấn luyện LLM y tế
-│   ├── 03_clean_rag_chunks_vi.ipynb    # Làm sạch dữ liệu RAG tiếng Việt
-│   └── 04_finetune_t5_query_rewriter_kaggle.ipynb # 🌟 Fine-tune T5 Query Rewriter
+│   ├── 01-train-qwen3-medical-qa.ipynb            # Huấn luyện fine-tune LLM y tế Qwen3-4B
+│   ├── 02-translate-medical-rag-en2vi.ipynb       # Dịch tập kiến thức RAG sang tiếng Việt
+│   ├── 03_clean_rag_chunks_vi.ipynb               # Làm sạch & chuẩn hóa phân mảnh RAG
+│   ├── 04-finetune-t5-query-rewriter-kaggle.ipynb # 🌟 Fine-tune mô hình T5 Query Rewriter SOTA
+│   ├── ddp-finetuning.ipynb                       # Huấn luyện phân tán đa GPU (DDP) trên Kaggle
+│   └── evaluate_on_kaggle.ipynb                   # Đánh giá & kiểm thử chỉ số mô hình trên Kaggle
 └── README.md                      # Tài liệu hướng dẫn hệ thống
 ```
 
